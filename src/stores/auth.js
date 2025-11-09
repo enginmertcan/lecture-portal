@@ -15,17 +15,84 @@ const writeToStorage = (key, value) => {
   }
 };
 
+const normalizeRoleName = (role) => {
+  if (!role) return '';
+  return role.startsWith('ROLE_') ? role : `ROLE_${role}`;
+};
+
+const decodeJwtPayload = (token) => {
+  if (!token) {
+    return null;
+  }
+  try {
+    const [, payload] = token.split('.');
+    if (!payload) {
+      return null;
+    }
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const pad = '='.repeat((4 - (normalized.length % 4)) % 4);
+    const base64 = normalized + pad;
+    const decoder =
+      typeof globalThis !== 'undefined' && typeof globalThis.atob === 'function'
+        ? globalThis.atob
+        : (value) => Buffer.from(value, 'base64').toString('binary');
+    const json = decoder(base64);
+    return JSON.parse(json);
+  } catch (error) {
+    console.warn('JWT parse failed', error);
+    return null;
+  }
+};
+
+const extractRoles = (payload) => {
+  const raw = payload?.role;
+  if (!raw) {
+    return [];
+  }
+  if (Array.isArray(raw)) {
+    return raw.map((entry) => entry?.authority || entry).filter(Boolean);
+  }
+  if (typeof raw === 'object') {
+    return [raw.authority || raw].filter(Boolean);
+  }
+  if (typeof raw === 'string') {
+    return [raw];
+  }
+  return [];
+};
+
+const getTokenMeta = (token) => {
+  const payload = decodeJwtPayload(token);
+  return {
+    roles: extractRoles(payload),
+    subject: payload?.sub || null,
+  };
+};
+
+const initialAccessToken = readFromStorage(STORAGE_KEYS.access);
+const initialMeta = getTokenMeta(initialAccessToken);
+
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    accessToken: readFromStorage(STORAGE_KEYS.access),
+    accessToken: initialAccessToken,
     refreshToken: readFromStorage(STORAGE_KEYS.refresh),
+    roles: initialMeta.roles,
+    identityNo: initialMeta.subject,
     loading: false,
     error: null,
   }),
   getters: {
     isAuthenticated: (state) => Boolean(state.accessToken),
+    hasRole: (state) => (role) => state.roles.includes(normalizeRoleName(role)),
+    hasAnyRole: (state) => (roles = []) =>
+      roles.some((role) => state.roles.includes(normalizeRoleName(role))),
   },
   actions: {
+    updateFromAccessToken(token) {
+      const meta = getTokenMeta(token);
+      this.roles = meta.roles;
+      this.identityNo = meta.subject;
+    },
     async login({ identityNo, password }) {
       this.loading = true;
       this.error = null;
@@ -73,12 +140,15 @@ export const useAuthStore = defineStore('auth', {
     setTokens({ accessToken, refreshToken }) {
       this.accessToken = accessToken;
       this.refreshToken = refreshToken;
+      this.updateFromAccessToken(accessToken);
       writeToStorage(STORAGE_KEYS.access, accessToken);
       writeToStorage(STORAGE_KEYS.refresh, refreshToken);
     },
     logout() {
       this.accessToken = null;
       this.refreshToken = null;
+      this.roles = [];
+      this.identityNo = null;
       this.error = null;
       writeToStorage(STORAGE_KEYS.access, null);
       writeToStorage(STORAGE_KEYS.refresh, null);

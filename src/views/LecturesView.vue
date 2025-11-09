@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
 import httpClient from '../api/httpClient';
+import { useAuthStore } from '../stores/auth';
 
 const pageSize = 10;
 const lectures = ref([]);
@@ -28,6 +29,9 @@ const lectureForm = reactive({
 const formLoading = ref(false);
 const formError = ref('');
 
+const authStore = useAuthStore();
+const canManageLectures = computed(() => authStore.hasAnyRole(['ADMIN', 'TEACHER']));
+
 const fetchLectures = async () => {
   loading.value = true;
   error.value = '';
@@ -50,6 +54,10 @@ const fetchLectures = async () => {
 };
 
 const fetchTeachers = async () => {
+  if (!canManageLectures.value) {
+    teacherOptions.value = [];
+    return;
+  }
   try {
     const { data } = await httpClient.get('/api/users/by-role', {
       params: { role: 'TEACHER' },
@@ -98,6 +106,10 @@ const handleSelectLecture = (lecture) => {
 };
 
 const createLecture = async () => {
+  if (!canManageLectures.value) {
+    formError.value = 'Bu işlem için yetkin yok';
+    return;
+  }
   formLoading.value = true;
   formError.value = '';
   try {
@@ -112,6 +124,9 @@ const createLecture = async () => {
 };
 
 const deleteLecture = async (lecture) => {
+  if (!canManageLectures.value) {
+    return;
+  }
   const confirmed = window.confirm(`"${lecture.name}" dersini silmek istediğine emin misin?`);
   if (!confirmed) return;
   try {
@@ -201,7 +216,13 @@ onMounted(() => {
                 <td>{{ lecture.capacity }}</td>
                 <td>#{{ lecture.teacherId }}</td>
                 <td>
-                  <button class="ghost tiny" @click.stop="deleteLecture(lecture)">Sil</button>
+                  <button
+                    v-if="canManageLectures"
+                    class="ghost tiny"
+                    @click.stop="deleteLecture(lecture)"
+                  >
+                    Sil
+                  </button>
                 </td>
               </tr>
               <tr v-if="!loading && !filteredLectures.length">
@@ -220,7 +241,7 @@ onMounted(() => {
         </footer>
       </div>
 
-      <div class="card">
+      <div v-if="canManageLectures" class="card">
         <header class="card-header">
           <div>
             <p class="eyebrow">Yeni Ders</p>
@@ -260,6 +281,15 @@ onMounted(() => {
             <p v-if="formError" class="error">{{ formError }}</p>
           </div>
         </form>
+      </div>
+      <div v-else class="card notice">
+        <header class="card-header">
+          <div>
+            <p class="eyebrow">Yetki</p>
+            <h2>Yalnızca eğitmenler/adminler ders oluşturabilir</h2>
+          </div>
+        </header>
+        <p>Sistemde kayıtlı dersleri görüntüleyebilir, detaylarını inceleyebilirsin.</p>
       </div>
     </div>
 

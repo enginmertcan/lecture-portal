@@ -66,13 +66,13 @@ const routes = [
     path: '/enrollments',
     name: 'enrollments',
     component: EnrollmentsView,
-    meta: { requiresAuth: true },
+    meta: { requiresAuth: true, roles: ['ADMIN', 'TEACHER'] },
   },
   {
     path: '/users',
     name: 'users',
     component: UsersView,
-    meta: { requiresAuth: true },
+    meta: { requiresAuth: true, roles: ['ADMIN'] },
   },
   {
     path: '/:pathMatch(.*)*',
@@ -90,6 +90,10 @@ router.beforeEach((to, _, next) => {
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     return next({ name: 'login', query: { redirect: to.fullPath } });
+  }
+
+  if (to.meta.roles && !authStore.hasAnyRole(to.meta.roles)) {
+    return next({ name: 'dashboard' });
   }
 
   if (to.meta.guestOnly && authStore.isAuthenticated) {

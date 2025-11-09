@@ -32,10 +32,16 @@ const handleSubmit = async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form.value),
     });
-    if (!response.ok) {
-      throw new Error('Kayıt oluşturulamadı');
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
     }
-    const data = await response.json();
+    if (!response.ok) {
+      const backendMessage = data?.errorMessage || data?.message;
+      throw new Error(backendMessage || 'Kayıt oluşturulamadı');
+    }
     authStore.setTokens(data);
     router.push('/');
   } catch (err) {

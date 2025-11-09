@@ -15,38 +15,24 @@ const links = [
   { label: 'Sınıflar', to: '/classrooms', name: 'classrooms' },
   { label: 'Slotlar', to: '/slots', name: 'slots' },
   { label: 'Not Bileşenleri', to: '/grade-components', name: 'gradeComponents' },
-  { label: 'Kayıtlar', to: '/enrollments', name: 'enrollments' },
-  { label: 'Kullanıcılar', to: '/users', name: 'users' },
+  { label: 'Kayıtlar', to: '/enrollments', name: 'enrollments', roles: ['ADMIN', 'TEACHER'] },
+  { label: 'Kullanıcılar', to: '/users', name: 'users', roles: ['ADMIN'] },
 ];
 
-const tokenPayload = computed(() => {
-  if (!authStore.accessToken) {
-    return null;
+const visibleLinks = computed(() =>
+  links.filter((link) => !link.roles || authStore.hasAnyRole(link.roles))
+);
+
+const roleLabel = computed(() => {
+  if (!authStore.roles.length) {
+    return 'rol bilgisi yok';
   }
-  try {
-    const [, payload] = authStore.accessToken.split('.');
-    return JSON.parse(atob(payload));
-  } catch (error) {
-    console.error('JWT parse failed', error);
-    return null;
-  }
+  return authStore.roles
+    .map((role) => role.replace('ROLE_', '').toLowerCase())
+    .join(', ');
 });
 
-const roles = computed(() => {
-  const raw = tokenPayload.value?.role;
-  if (!raw) {
-    return [];
-  }
-  if (Array.isArray(raw)) {
-    return raw.map((entry) => entry?.authority || entry).filter(Boolean);
-  }
-  if (typeof raw === 'object') {
-    return [raw.authority].filter(Boolean);
-  }
-  return [raw];
-});
-
-const subject = computed(() => tokenPayload.value?.sub || 'Bilinmeyen Kullanıcı');
+const subject = computed(() => authStore.identityNo || 'Bilinmeyen Kullanıcı');
 
 const logout = () => {
   authStore.logout();
@@ -66,7 +52,7 @@ const logout = () => {
 
     <nav>
       <router-link
-        v-for="link in links"
+        v-for="link in visibleLinks"
         :key="link.to"
         :to="link.to"
         :class="{ active: route.name === link.name }"
@@ -78,7 +64,7 @@ const logout = () => {
     <div class="session">
       <div class="user-pill">
         <p>{{ subject }}</p>
-        <small>{{ roles.length ? roles.join(', ') : 'rol bilgisi yok' }}</small>
+        <small>{{ roleLabel }}</small>
       </div>
       <div class="endpoint">
         <p>API</p>

@@ -1,6 +1,6 @@
-# Trendyol Lecture Portal (Vue 3)
+#  Lecture Portal (Vue 3)
 
-Vue 3 + Vite arayüzü Trendyol Lecture Management API’sinin (Spring Boot) canlı Railway dağıtımına bağlanır. JWT tabanlı kimlik doğrulama yapar, role bazlı operasyonları (lectures, classrooms, schedules, enrollments, grade components, users) tek konsolda sunar.
+Vue 3 + Vite arayüzü  Lecture Management API’sinin (Spring Boot) canlı Railway dağıtımına bağlanır. JWT tabanlı kimlik doğrulama yapar, role bazlı operasyonları (lectures, classrooms, schedules, enrollments, grade components, users) tek konsolda sunar.
 
 ## Başlarken
 
@@ -19,10 +19,18 @@ Varsayılan olarak `http://localhost:5173` portunda açılır.
 
 ### Prod / Stage API seçimi
 
-Uygulama varsayılan olarak `https://api-production-7b6a.up.railway.app` taban URL’ini kullanır. Farklı bir backend (ör. lokal Spring instance’ı) hedeflemek için `.env` ya da `.env.local` dosyasına:
+Geliştirme modunda (`npm run dev`) frontend `/api` yolunu kullanır ve Vite proxy’si istekleri otomatik olarak canlı Railway backend’ine yönlendirir; bu sayede CORS hatası olmadan çalışırsın.
+
+Farklı bir backend (ör. lokal Spring instance’ı) hedeflemek için `.env` ya da `.env.local` dosyasına:
 
 ```
 VITE_API_BASE_URL=http://localhost:8080
+```
+
+Proxy hedefini değiştirmek ve yine `/api` ile çalışmak istersen:
+
+```
+VITE_DEV_PROXY_TARGET=http://localhost:8080
 ```
 
 ## Uygulama Haritası
