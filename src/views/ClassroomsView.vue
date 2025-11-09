@@ -1,6 +1,7 @@
 <script setup>
 import { reactive, ref } from 'vue';
 import httpClient from '../api/httpClient';
+import InfoHint from '../components/InfoHint.vue';
 
 const classrooms = ref([]);
 const loading = ref(false);
@@ -81,7 +82,15 @@ fetchClassrooms();
     <header class="section-headline">
       <div>
         <p class="eyebrow">Kaynaklar</p>
-        <h1>Sınıf yönetimi</h1>
+        <h1>
+          Sınıf yönetimi
+          <InfoHint title="Sınıf kaydı ipuçları">
+            <ul>
+              <li>Program ekranında her oturum bir sınıf ister; önce sınıfı tanımla.</li>
+              <li>Kapasite, öğrenci kayıt limitini belirler.</li>
+            </ul>
+          </InfoHint>
+        </h1>
         <p>Fiziksel sınıflar, kapasite ve lokasyon bilgilerini API üzerinden yönet.</p>
       </div>
     </header>

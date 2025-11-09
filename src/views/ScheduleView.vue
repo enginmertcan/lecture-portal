@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue';
 import httpClient from '../api/httpClient';
+import InfoHint from '../components/InfoHint.vue';
 
 const schedules = ref([]);
 const loading = ref(false);
@@ -93,7 +94,15 @@ onMounted(() => {
     <header class="section-headline">
       <div>
         <p class="eyebrow">Planlama</p>
-        <h1>Ders takvimi</h1>
+        <h1>
+          Ders takvimi
+          <InfoHint title="Programlama adımları">
+            <ul>
+              <li>Ders, sınıf ve slot kayıtları hazır olmadan oturum oluşturamazsın.</li>
+              <li>Tarih aralığı ile gün/saat bilgisi çakışmaları otomatik kontrol eder.</li>
+            </ul>
+          </InfoHint>
+        </h1>
         <p>Canlı API’daki /api/lecture-schedules uçlarından gelen ders oturumları.</p>
       </div>
       <button class="ghost" @click="fetchSchedules" :disabled="loading">

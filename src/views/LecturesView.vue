@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import httpClient from '../api/httpClient';
 import { useAuthStore } from '../stores/auth';
+import InfoHint from '../components/InfoHint.vue';
 
 const pageSize = 10;
 const lectures = ref([]);
@@ -176,7 +177,16 @@ onMounted(() => {
     <header class="section-headline">
       <div>
         <p class="eyebrow">Canlı API</p>
-        <h1>Ders Operasyonları</h1>
+        <h1>
+          Ders Operasyonları
+          <InfoHint title="Ders oluşturma rehberi">
+            <ul>
+              <li>Öğretmen rolüyle giriş yapan hesaplar ders açabilir.</li>
+              <li>Sınıf ve slot kayıtları hazır olmadan ders programı yapılamaz.</li>
+              <li>Atanabilir öğretmen listesi `/api/users/by-role?role=TEACHER` çıktısından gelir.</li>
+            </ul>
+          </InfoHint>
+        </h1>
         <p>
           Ders oluştur, güncel listeyi filtrele ve seçtiğin dersin programını/grade component’lerini incele.
         </p>

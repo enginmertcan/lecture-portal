@@ -1,6 +1,7 @@
 <script setup>
 import { reactive, ref, watch } from 'vue';
 import httpClient from '../api/httpClient';
+import InfoHint from '../components/InfoHint.vue';
 
 const gradeComponents = ref([]);
 const loading = ref(false);
@@ -107,7 +108,15 @@ fetchComponents();
     <header class="section-headline">
       <div>
         <p class="eyebrow">Notlandırma</p>
-        <h1>Bileşen yönetimi</h1>
+        <h1>
+          Bileşen yönetimi
+          <InfoHint title="Not bileşeni kılavuzu">
+            <ul>
+              <li>Bir dersin bileşen ağırlıkları toplamda %100 olmalı.</li>
+              <li>Maksimum puan, öğretmenin verebileceği üst sınırı belirler.</li>
+            </ul>
+          </InfoHint>
+        </h1>
         <p>Derslerin vize, final, ödev gibi bileşenlerini tanımlayarak ağırlıklarını yönet.</p>
       </div>
       <select v-model="filterLectureId" class="filter-select">

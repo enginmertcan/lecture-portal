@@ -4,6 +4,9 @@ import httpClient from '../api/httpClient';
 
 const loading = ref(false);
 const errors = ref([]);
+const analyticsSummary = ref(null);
+const teacherWorkload = ref([]);
+const enrollmentFunnel = ref({});
 
 const state = reactive({
   lectures: [],
@@ -63,6 +66,63 @@ const fetchDashboard = async () => {
   loading.value = false;
 };
 
+const fetchAnalytics = async () => {
+  try {
+    const { data } = await httpClient.get('/api/analytics/summary');
+    analyticsSummary.value = data;
+  } catch (err) {
+    errors.value.push(`analytics/summary: ${err.message || 'yüklenemedi'}`);
+  }
+
+  try {
+    const { data } = await httpClient.get('/api/analytics/teacher-workload');
+    teacherWorkload.value = data;
+  } catch (err) {
+    errors.value.push(`teacher workload: ${err.message || 'yüklenemedi'}`);
+  }
+
+  try {
+    const { data } = await httpClient.get('/api/analytics/enrollment-funnel');
+    enrollmentFunnel.value = data.statusCounts || {};
+  } catch (err) {
+    errors.value.push(`enrollment funnel: ${err.message || 'yüklenemedi'}`);
+  }
+};
+
+const summaryMetrics = computed(() => {
+  if (!analyticsSummary.value) {
+    return [];
+  }
+  const summary = analyticsSummary.value;
+  return [
+    {
+      label: 'Toplam Ders',
+      value: summary.totalLectures,
+      helper: 'Sistemde tanımlı ders sayısı',
+    },
+    {
+      label: 'Aktif Kayıt',
+      value: summary.activeEnrollments,
+      helper: 'Şu anda derse devam eden öğrenciler',
+    },
+    {
+      label: 'Bekleme Listesi',
+      value: summary.waitlistedEnrollments,
+      helper: 'Seat bekleyen öğrenciler',
+    },
+    {
+      label: 'Kullanılan Sınıf',
+      value: summary.classroomsInUse,
+      helper: 'Programda aktif sınıf sayısı',
+    },
+    {
+      label: 'Yaklaşan Oturum',
+      value: summary.upcomingSessions,
+      helper: 'Bugünden sonra planlı oturumlar',
+    },
+  ];
+});
+
 const metrics = computed(() => [
   {
     label: 'Aktif Ders',
@@ -94,8 +154,20 @@ const metrics = computed(() => [
 const recentSchedules = computed(() => state.schedules.slice(0, 4));
 const recentLectures = computed(() => state.lectures.slice(0, 5));
 const recentEnrollments = computed(() => state.enrollments.slice(0, 5));
+const topTeacherWorkload = computed(() => teacherWorkload.value.slice(0, 5));
+const enrollmentFunnelList = computed(() => {
+  const preferredOrder = ['PENDING_APPROVAL', 'ACTIVE', 'WAITING', 'COMPLETED', 'DROPPED'];
+  const source = enrollmentFunnel.value || {};
+  return preferredOrder.map((status) => ({
+    status,
+    total: source[status] || 0,
+  }));
+});
 
-onMounted(fetchDashboard);
+onMounted(() => {
+  fetchDashboard();
+  fetchAnalytics();
+});
 </script>
 
 <template>
@@ -117,11 +189,69 @@ onMounted(fetchDashboard);
       </p>
     </div>
 
+    <div v-if="summaryMetrics.length" class="metric-grid">
+      <article v-for="metric in summaryMetrics" :key="metric.label" class="card metric">
+        <p class="eyebrow">{{ metric.label }}</p>
+        <h2>{{ metric.value }}</h2>
+        <p>{{ metric.helper }}</p>
+      </article>
+    </div>
+
     <div class="metric-grid">
       <article v-for="metric in metrics" :key="metric.label" class="card metric">
         <p class="eyebrow">{{ metric.label }}</p>
         <h2>{{ metric.value }}</h2>
         <p>{{ metric.helper }}</p>
+      </article>
+    </div>
+
+    <div class="grid-2">
+      <article class="card">
+        <header class="card-header">
+          <div>
+            <p class="eyebrow">Öğretmen Yükü</p>
+            <h2>Haftalık ders saatleri</h2>
+          </div>
+        </header>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Öğretmen</th>
+                <th>Ders Sayısı</th>
+                <th>Haftalık Saat</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="teacher in topTeacherWorkload" :key="teacher.teacherId">
+                <td>{{ teacher.teacherName }}</td>
+                <td>{{ teacher.lectureCount }}</td>
+                <td>{{ teacher.weeklyHours.toFixed(1) }}</td>
+              </tr>
+              <tr v-if="!topTeacherWorkload.length">
+                <td colspan="3">Öğretmen verisi bulunamadı.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="card">
+        <header class="card-header">
+          <div>
+            <p class="eyebrow">Kayıt Hunisi</p>
+            <h2>Durum bazlı öğrenci sayıları</h2>
+          </div>
+        </header>
+        <ul class="resource-list">
+          <li v-for="item in enrollmentFunnelList" :key="item.status">
+            <div>
+              <strong>{{ item.status }}</strong>
+              <p>Kayıt sayısı</p>
+            </div>
+            <span class="pill">{{ item.total }}</span>
+          </li>
+        </ul>
       </article>
     </div>
 

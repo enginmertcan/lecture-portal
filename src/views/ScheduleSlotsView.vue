@@ -1,6 +1,7 @@
 <script setup>
 import { reactive, ref } from 'vue';
 import httpClient from '../api/httpClient';
+import InfoHint from '../components/InfoHint.vue';
 
 const slots = ref([]);
 const loading = ref(false);
@@ -82,7 +83,15 @@ fetchSlots();
     <header class="section-headline">
       <div>
         <p class="eyebrow">Vardiyalar</p>
-        <h1>Slot yönetimi</h1>
+        <h1>
+          Slot yönetimi
+          <InfoHint title="Slot nedir?">
+            <p>
+              Slot, belirli gün ve saatten oluşan zaman bloğudur. Ders planlarken sınıf ve dersle eşleştirilerek
+              çakışmalar engellenir.
+            </p>
+          </InfoHint>
+        </h1>
         <p>Gün/saat kombinasyonlarını tanımlayarak ders programı için kullanılabilir zaman blokları oluştur.</p>
       </div>
     </header>

@@ -1,6 +1,7 @@
 <script setup>
 import { reactive, ref, watch } from 'vue';
 import httpClient from '../api/httpClient';
+import InfoHint from '../components/InfoHint.vue';
 
 const enrollments = ref([]);
 const loading = ref(false);
@@ -195,7 +196,17 @@ fetchEnrollments();
     <header class="section-headline">
       <div>
         <p class="eyebrow">Öğrenci İşleri</p>
-        <h1>Kayıt ve not yönetimi</h1>
+        <h1>
+          Kayıt ve not yönetimi
+          <InfoHint title="Kayıt yaşam döngüsü">
+            <ul>
+              <li><strong>Pending:</strong> Onay bekleyen başvuru.</li>
+              <li><strong>Active:</strong> Derse katılan öğrenci.</li>
+              <li><strong>Waiting:</strong> Kontenjan doluysa sıraya alınır.</li>
+              <li><strong>Completed:</strong> Ders bitince genel not girilir.</li>
+            </ul>
+          </InfoHint>
+        </h1>
         <p>Enrollment uçları üzerinden ders kayıtlarını ilerlet, drop et, not gir.</p>
       </div>
       <div class="filter-row">
