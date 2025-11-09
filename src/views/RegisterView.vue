@@ -7,12 +7,18 @@ import { useAuthStore } from '../stores/auth';
 const router = useRouter();
 const authStore = useAuthStore();
 
+const accountTypes = [
+  { label: 'Öğrenci Hesabı', value: 'STUDENT', helper: 'Derslere katılmak ve not görmek için' },
+  { label: 'Öğretmen Hesabı', value: 'TEACHER', helper: 'Ders oluşturmak ve yönetmek için' },
+];
+
 const form = ref({
   identityNo: '',
   name: '',
   surname: '',
   gender: 'FEMALE',
   password: '',
+  role: accountTypes[0].value,
 });
 
 const loading = ref(false);
@@ -61,6 +67,19 @@ const handleSubmit = async () => {
         IdentityNo benzersiz olmalı. Başarılı kayıt sonrası otomatik giriş yapılır.
       </p>
     </header>
+
+    <div class="account-toggle">
+      <button
+        v-for="option in accountTypes"
+        :key="option.value"
+        type="button"
+        :class="['toggle-chip', { active: form.role === option.value }]"
+        @click="form.role = option.value"
+      >
+        <strong>{{ option.label }}</strong>
+        <small>{{ option.helper }}</small>
+      </button>
+    </div>
 
     <form @submit.prevent="handleSubmit">
       <label>

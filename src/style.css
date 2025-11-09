@@ -209,6 +209,40 @@ textarea {
   color: #94a3b8;
 }
 
+.account-toggle {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.toggle-chip {
+  border: 1px solid #dde3f1;
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  background: #fff;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.toggle-chip strong {
+  font-size: 0.95rem;
+  color: #0f172a;
+}
+
+.toggle-chip small {
+  color: #94a3b8;
+}
+
+.toggle-chip.active {
+  border-color: #fb923c;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  transform: translateY(-2px);
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

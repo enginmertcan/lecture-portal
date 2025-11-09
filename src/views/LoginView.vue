@@ -1,16 +1,35 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useAuthStore } from '../stores/auth';
 
-const identityNo = ref('12345678901');
-const password = ref('P@ssw0rd!');
+const variants = {
+  STUDENT: {
+    label: 'Öğrenci Girişi',
+    subtitle: 'Ders katılımı, not görüntüleme ve kayıt işlemleri için giriş yap.',
+  },
+  TEACHER: {
+    label: 'Öğretmen Girişi',
+    subtitle: 'Ders planlama, sınıf yönetimi ve değerlendirme işlemleri için giriş yap.',
+  },
+};
+
+const route = useRoute();
+const selectedVariant = ref(route.query.type === 'teacher' ? 'TEACHER' : 'STUDENT');
+
+const identityNo = ref('');
+const password = ref('');
 const authStore = useAuthStore();
 const router = useRouter();
-const route = useRoute();
 const { loading } = storeToRefs(authStore);
 const formError = ref('');
+
+const variantMeta = computed(() => variants[selectedVariant.value]);
+
+const selectVariant = (value) => {
+  selectedVariant.value = value;
+};
 
 const handleSubmit = async () => {
   formError.value = '';
@@ -30,11 +49,32 @@ const handleSubmit = async () => {
   <section class="auth-card">
     <header>
       <p class="eyebrow">Trendyol Lecture Portal</p>
-      <h1>Dev Portal’a giriş yap</h1>
+      <h1>{{ variantMeta.label }}</h1>
       <p class="subtitle">
-        Backend’deki canlı /api uçlarına JWT ile bağlanmak için lütfen kimlik bilgilerinizi girin.
+        {{ variantMeta.subtitle }}
       </p>
     </header>
+
+    <div class="account-toggle">
+      <button
+        type="button"
+        class="toggle-chip"
+        :class="{ active: selectedVariant === 'STUDENT' }"
+        @click="selectVariant('STUDENT')"
+      >
+        <strong>Öğrenci</strong>
+        <small>Derslere katıl, notlarını görüntüle.</small>
+      </button>
+      <button
+        type="button"
+        class="toggle-chip"
+        :class="{ active: selectedVariant === 'TEACHER' }"
+        @click="selectVariant('TEACHER')"
+      >
+        <strong>Öğretmen</strong>
+        <small>Ders oluştur, sınıfları ve notları yönet.</small>
+      </button>
+    </div>
 
     <form @submit.prevent="handleSubmit">
       <label>
