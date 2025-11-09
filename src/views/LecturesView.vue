@@ -224,7 +224,10 @@ onMounted(() => {
                 <td>{{ lecture.name }}</td>
                 <td>{{ lecture.description }}</td>
                 <td>{{ lecture.capacity }}</td>
-                <td>#{{ lecture.teacherId }}</td>
+                <td>
+                  <div>{{ lecture.teacherName || 'Atanmadı' }}</div>
+                  <small v-if="lecture.teacherId">#{{ lecture.teacherId }}</small>
+                </td>
                 <td>
                   <button
                     v-if="canManageLectures"
@@ -308,8 +311,9 @@ onMounted(() => {
         <h2>{{ selectedLecture.name }} programı</h2>
         <p>{{ selectedLecture.description }}</p>
         <p class="meta">
-          Kapasite: <strong>{{ selectedLecture.capacity }}</strong> • Öğretmen ID:
-          <strong>{{ selectedLecture.teacherId }}</strong>
+          Kapasite: <strong>{{ selectedLecture.capacity }}</strong> • Öğretmen:
+          <strong>{{ selectedLecture.teacherName }}</strong>
+          <span v-if="selectedLecture.teacherId">(#{{ selectedLecture.teacherId }})</span>
         </p>
 
         <div class="schedule-wrapper">

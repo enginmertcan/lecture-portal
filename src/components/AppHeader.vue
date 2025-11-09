@@ -16,6 +16,7 @@ const links = [
   { label: 'Slotlar', to: '/slots', name: 'slots' },
   { label: 'Not Bileşenleri', to: '/grade-components', name: 'gradeComponents' },
   { label: 'Kayıtlar', to: '/enrollments', name: 'enrollments', roles: ['ADMIN', 'TEACHER'] },
+  { label: 'Veri Seti', to: '/bootstrap', name: 'bootstrap', roles: ['ADMIN'] },
   { label: 'Kullanıcılar', to: '/users', name: 'users', roles: ['ADMIN'] },
 ];
 

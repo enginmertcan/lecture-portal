@@ -159,6 +159,34 @@ button:disabled {
   border: 1px solid #4338ca;
 }
 
+.ghost.danger {
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+.stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.align-end {
+  align-items: flex-end;
+}
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin: 1rem 0;
+}
+
+.hint {
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
 .auth-card {
   max-width: 420px;
   margin: 4rem auto;
@@ -492,6 +520,11 @@ tbody tr.active {
 .pill.secondary {
   background: #ecfeff;
   color: #0e7490;
+}
+
+.pill.success {
+  background: #d1fae5;
+  color: #047857;
 }
 
 .card-header {

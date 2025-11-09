@@ -270,7 +270,7 @@ onMounted(() => {
               <strong>{{ lecture.name }}</strong>
               <p>{{ lecture.description }}</p>
             </div>
-            <span class="pill">Teacher #{{ lecture.teacherId }}</span>
+            <span class="pill">{{ lecture.teacherName || `#${lecture.teacherId}` }}</span>
           </li>
           <li v-if="!recentLectures.length">
             <p>Gösterilecek ders yok.</p>

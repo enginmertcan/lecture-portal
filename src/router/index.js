@@ -12,6 +12,7 @@ const ScheduleSlotsView = () => import('../views/ScheduleSlotsView.vue');
 const GradeComponentsView = () => import('../views/GradeComponentsView.vue');
 const EnrollmentsView = () => import('../views/EnrollmentsView.vue');
 const UsersView = () => import('../views/UsersView.vue');
+const BootstrapView = () => import('../views/BootstrapView.vue');
 
 const routes = [
   {
@@ -72,6 +73,12 @@ const routes = [
     path: '/users',
     name: 'users',
     component: UsersView,
+    meta: { requiresAuth: true, roles: ['ADMIN'] },
+  },
+  {
+    path: '/bootstrap',
+    name: 'bootstrap',
+    component: BootstrapView,
     meta: { requiresAuth: true, roles: ['ADMIN'] },
   },
   {
