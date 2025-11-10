@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { API_BASE_URL } from '../config';
 import { useAuthStore } from '../stores/auth';
@@ -23,16 +23,92 @@ const form = ref({
 
 const loading = ref(false);
 const error = ref('');
+const fieldErrors = reactive({
+  identityNo: '',
+  name: '',
+  surname: '',
+  gender: '',
+  password: '',
+  role: '',
+});
 
 const genders = [
   { label: 'Kadın', value: 'FEMALE' },
   { label: 'Erkek', value: 'MALE' },
 ];
 
+const passwordRules = [
+  { key: 'length', label: 'En az 8 karakter', test: (value) => value.length >= 8 },
+  { key: 'lower', label: 'En az 1 küçük harf', test: (value) => /[a-z]/.test(value) },
+  { key: 'upper', label: 'En az 1 büyük harf', test: (value) => /[A-Z]/.test(value) },
+  { key: 'number', label: 'En az 1 rakam', test: (value) => /\d/.test(value) },
+  { key: 'special', label: 'En az 1 özel karakter', test: (value) => /[^A-Za-z0-9]/.test(value) },
+];
+
+const passwordChecklist = computed(() =>
+  passwordRules.map((rule) => ({
+    ...rule,
+    passed: rule.test(form.value.password),
+  }))
+);
+
+const passwordStrength = computed(() => {
+  const passed = passwordChecklist.value.filter((rule) => rule.passed).length;
+  return Math.round((passed / passwordRules.length) * 100);
+});
+
+const passwordStrengthLabel = computed(() => {
+  const strength = passwordStrength.value;
+  if (strength >= 80) return 'Çok güçlü';
+  if (strength >= 60) return 'Güçlü';
+  if (strength >= 40) return 'Orta';
+  return 'Zayıf';
+});
+
+const passwordStrengthColor = computed(() => {
+  const strength = passwordStrength.value;
+  if (strength >= 80) return '#22c55e';
+  if (strength >= 60) return '#84cc16';
+  if (strength >= 40) return '#f97316';
+  return '#ef4444';
+});
+
+const meetsPasswordRules = computed(() => passwordChecklist.value.every((rule) => rule.passed));
+
+const resetFieldErrors = () => {
+  Object.keys(fieldErrors).forEach((key) => {
+    fieldErrors[key] = '';
+  });
+};
+
+const clearFieldError = (field) => {
+  if (field && fieldErrors[field]) {
+    fieldErrors[field] = '';
+  }
+};
+
+const applyFieldErrors = (details) => {
+  if (!Array.isArray(details)) {
+    return;
+  }
+  details.forEach(({ field, message }) => {
+    const normalizedField = field?.split('.')?.pop();
+    if (normalizedField && normalizedField in fieldErrors) {
+      fieldErrors[normalizedField] = message;
+    }
+  });
+};
+
 const handleSubmit = async () => {
   loading.value = true;
   error.value = '';
+  resetFieldErrors();
   try {
+    if (!meetsPasswordRules.value) {
+      fieldErrors.password = 'Parola gereksinimlerini karşılamıyor.';
+      throw new Error('Parolan minimum gereksinimlerini karşılamıyor.');
+    }
+
     const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -45,7 +121,8 @@ const handleSubmit = async () => {
       data = null;
     }
     if (!response.ok) {
-      const backendMessage = data?.errorMessage || data?.message;
+      applyFieldErrors(data?.details);
+      const backendMessage = data?.message || data?.errorMessage;
       throw new Error(backendMessage || 'Kayıt oluşturulamadı');
     }
     authStore.setTokens(data);
@@ -74,42 +151,96 @@ const handleSubmit = async () => {
         :key="option.value"
         type="button"
         :class="['toggle-chip', { active: form.role === option.value }]"
-        @click="form.role = option.value"
+        @click="
+          form.role = option.value;
+          clearFieldError('role');
+        "
       >
         <strong>{{ option.label }}</strong>
         <small>{{ option.helper }}</small>
       </button>
     </div>
+    <p v-if="fieldErrors.role" class="field-error">{{ fieldErrors.role }}</p>
+
+    <div v-if="error" class="form-error-banner" role="alert">
+      <strong>Kayıt tamamlanamadı</strong>
+      <span>{{ error }}</span>
+    </div>
 
     <form @submit.prevent="handleSubmit">
-      <label>
+      <label :class="{ invalid: fieldErrors.identityNo }">
         T.C. Kimlik No
-        <input v-model="form.identityNo" type="text" maxlength="11" required placeholder="12345678901" />
+        <input
+          v-model="form.identityNo"
+          type="text"
+          maxlength="11"
+          required
+          placeholder="12345678901"
+          @input="clearFieldError('identityNo')"
+        />
+        <small v-if="fieldErrors.identityNo" class="field-error">{{ fieldErrors.identityNo }}</small>
       </label>
-      <label>
+      <label :class="{ invalid: fieldErrors.name }">
         Ad
-        <input v-model="form.name" type="text" required placeholder="Merve" />
+        <input
+          v-model="form.name"
+          type="text"
+          required
+          placeholder="Merve"
+          @input="clearFieldError('name')"
+        />
+        <small v-if="fieldErrors.name" class="field-error">{{ fieldErrors.name }}</small>
       </label>
-      <label>
+      <label :class="{ invalid: fieldErrors.surname }">
         Soyad
-        <input v-model="form.surname" type="text" required placeholder="Kaya" />
+        <input
+          v-model="form.surname"
+          type="text"
+          required
+          placeholder="Kaya"
+          @input="clearFieldError('surname')"
+        />
+        <small v-if="fieldErrors.surname" class="field-error">{{ fieldErrors.surname }}</small>
       </label>
-      <label>
+      <label :class="{ invalid: fieldErrors.gender }">
         Cinsiyet
-        <select v-model="form.gender" required>
+        <select v-model="form.gender" required @change="clearFieldError('gender')">
           <option v-for="option in genders" :key="option.value" :value="option.value">
             {{ option.label }}
           </option>
         </select>
+        <small v-if="fieldErrors.gender" class="field-error">{{ fieldErrors.gender }}</small>
       </label>
-      <label>
+      <label :class="{ invalid: fieldErrors.password }">
         Parola
-        <input v-model="form.password" type="password" minlength="6" required placeholder="••••••••" />
+        <input
+          v-model="form.password"
+          type="password"
+          minlength="8"
+          required
+          placeholder="••••••••"
+          @input="clearFieldError('password')"
+        />
+        <div class="password-meter">
+          <div
+            class="password-meter__bar"
+            :style="{ width: `${passwordStrength}%`, backgroundColor: passwordStrengthColor }"
+          ></div>
+        </div>
+        <span class="password-meter__label" :style="{ color: passwordStrengthColor }">
+          {{ passwordStrengthLabel }}
+        </span>
+        <ul class="password-checklist">
+          <li v-for="rule in passwordChecklist" :key="rule.key" :class="{ passed: rule.passed }">
+            <span class="dot"></span>
+            {{ rule.label }}
+          </li>
+        </ul>
+        <small v-if="fieldErrors.password" class="field-error">{{ fieldErrors.password }}</small>
       </label>
       <button type="submit" :disabled="loading">
         {{ loading ? 'Kaydediliyor...' : 'Kayıt Ol' }}
       </button>
-      <p v-if="error" class="error">{{ error }}</p>
     </form>
 
     <p class="helper">

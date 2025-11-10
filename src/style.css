@@ -232,6 +232,80 @@ textarea {
   color: #dc2626;
 }
 
+.form-error-banner {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.field-error {
+  font-size: 0.8rem;
+  color: #dc2626;
+}
+
+label.invalid input,
+label.invalid select {
+  border-color: #fb7185;
+  box-shadow: 0 0 0 1px #fecdd3;
+}
+
+.password-meter {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+  margin-top: 0.35rem;
+}
+
+.password-meter__bar {
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.2s ease, background 0.2s ease;
+}
+
+.password-meter__label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-top: 0.35rem;
+  display: inline-block;
+}
+
+.password-checklist {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.password-checklist li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.password-checklist li.passed {
+  color: #16a34a;
+}
+
+.password-checklist .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  display: inline-block;
+}
+
 .helper {
   font-size: 0.85rem;
   color: #94a3b8;
