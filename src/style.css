@@ -697,6 +697,21 @@ tbody tr.active {
   transition: width 0.2s ease;
 }
 
+.student-detail-card .subtitle {
+  color: #64748b;
+}
+
+.student-detail-section {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.student-detail-section h3 {
+  margin: 0;
+}
+
 .suggest-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

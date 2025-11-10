@@ -437,15 +437,6 @@ onMounted(() => {
           <p v-if="loading" class="status">Dersler yükleniyor...</p>
           <p v-if="error" class="error status">{{ error }}</p>
         </div>
-        <div v-if="isStudent" class="student-enrollment-state">
-          <p v-if="myEnrollmentsLoading" class="status">Kayıt durumun güncelleniyor...</p>
-          <p v-if="myEnrollmentsError" class="error status">{{ myEnrollmentsError }}</p>
-          <p v-if="enrollmentState.error" class="error status">{{ enrollmentState.error }}</p>
-          <p v-if="enrollmentState.success" class="status success">
-            {{ enrollmentState.success }}
-          </p>
-        </div>
-
         <footer class="table-footer">
           <button @click="prevPage" :disabled="page === 0">Önceki</button>
           <span>Sayfa {{ page + 1 }} / {{ Math.max(totalPages, 1) }}</span>
@@ -494,18 +485,109 @@ onMounted(() => {
           </div>
         </form>
       </div>
-      <div v-else class="card notice">
-        <header class="card-header">
-          <div>
-            <p class="eyebrow">Yetki</p>
-            <h2>Yalnızca eğitmenler/adminler ders oluşturabilir</h2>
+      <div v-else class="card student-detail-card">
+        <template v-if="selectedLecture">
+          <header class="card-header">
+            <div>
+              <p class="eyebrow">Seçilen ders</p>
+              <h2>{{ selectedLecture.name }}</h2>
+              <p class="subtitle">{{ selectedLecture.description || 'Açıklama bulunmuyor' }}</p>
+            </div>
+          </header>
+          <p class="meta">
+            Kapasite: <strong>{{ selectedLecture.capacity }}</strong> • Öğretmen:
+            <strong>{{ selectedLecture.teacherName }}</strong>
+            <span v-if="selectedLecture.teacherId">(#{{ selectedLecture.teacherId }})</span>
+          </p>
+
+          <div class="student-enrollment-state">
+            <p v-if="myEnrollmentsLoading" class="status">Kayıt durumun güncelleniyor...</p>
+            <p v-if="myEnrollmentsError" class="error status">{{ myEnrollmentsError }}</p>
+            <p v-if="enrollmentState.error" class="error status">{{ enrollmentState.error }}</p>
+            <p v-if="enrollmentState.success" class="status success">
+              {{ enrollmentState.success }}
+            </p>
           </div>
-        </header>
-        <p>Sistemde kayıtlı dersleri görüntüleyebilir, detaylarını inceleyebilirsin.</p>
+
+          <div class="capacity-panel">
+            <div class="capacity-panel__row">
+              <div>
+                <p class="eyebrow">Kontenjan durumu</p>
+                <div class="capacity-meter">
+                  <div class="capacity-meter__bar" :style="{ width: `${capacityUsage}%` }"></div>
+                </div>
+                <small>{{ lectureEnrollmentStats.active }} / {{ selectedLecture.capacity }} aktif öğrenci</small>
+              </div>
+              <div class="capacity-panel__stats">
+                <span class="pill success">{{ lectureEnrollmentStats.pending }} onay kuyruğu</span>
+                <span class="pill secondary">{{ lectureEnrollmentStats.waiting }} bekleme</span>
+              </div>
+            </div>
+            <p v-if="selectedEnrollment?.waitlistPosition" class="hint">
+              Bekleme sırası: #{{ selectedEnrollment.waitlistPosition }}
+            </p>
+            <div class="action-buttons">
+              <button
+                v-if="!selectedEnrollment"
+                class="ghost"
+                :disabled="enrollmentState.loading"
+                @click="enrollInLecture(selectedLecture)"
+              >
+                {{ enrollmentState.loading ? 'Gönderiliyor...' : 'Bu derse kayıt ol' }}
+              </button>
+              <button
+                v-else
+                class="ghost danger"
+                :disabled="enrollmentState.loading"
+                @click="dropEnrollment(selectedEnrollment, selectedLecture)"
+              >
+                Kaydı iptal et
+              </button>
+            </div>
+          </div>
+
+          <section class="student-detail-section">
+            <h3>Program</h3>
+            <p v-if="scheduleLoading" class="status">Program yükleniyor...</p>
+            <p v-if="scheduleError" class="error">{{ scheduleError }}</p>
+            <ul v-else-if="schedule.length" class="resource-list">
+              <li v-for="slot in schedule" :key="slot.id">
+                <div>
+                  <strong>{{ slot.dayOfWeek }}</strong>
+                  <p class="date-range">{{ slot.startTime }} - {{ slot.endTime }}</p>
+                </div>
+                <span class="pill">{{ slot.classroomName }}</span>
+              </li>
+            </ul>
+            <p v-else>Bu ders için planlanmış oturum bulunamadı.</p>
+          </section>
+
+          <section class="student-detail-section">
+            <h3>Not bileşenleri</h3>
+            <p class="subtitle">API: /api/grade-components?lectureId={{ selectedLecture.id }}</p>
+            <p v-if="gradeLoading" class="status">Not bileşenleri yükleniyor...</p>
+            <p v-if="gradeError" class="error">{{ gradeError }}</p>
+            <ul class="resource-list" v-if="!gradeLoading && !gradeError">
+              <li v-for="component in gradeComponents" :key="component.id">
+                <div>
+                  <strong>{{ component.name }}</strong>
+                  <p>Ağırlık: %{{ component.weight }} • Max: {{ component.maxScore }}</p>
+                </div>
+                <span class="pill secondary">#{{ component.id }}</span>
+              </li>
+              <li v-if="!gradeComponents.length">
+                <p>Derse ait bileşen tanımlanmamış.</p>
+              </li>
+            </ul>
+          </section>
+        </template>
+        <template v-else>
+          <p class="status">Detayları görmek için listeden bir ders seç.</p>
+        </template>
       </div>
     </div>
 
-    <div class="grid-2" v-if="selectedLecture">
+    <div class="grid-2" v-if="selectedLecture && canManageLectures">
       <aside class="card">
         <h2>{{ selectedLecture.name }} programı</h2>
         <p>{{ selectedLecture.description }}</p>
