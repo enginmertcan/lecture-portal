@@ -24,6 +24,7 @@ const authStore = useAuthStore();
 const router = useRouter();
 const { loading } = storeToRefs(authStore);
 const formError = ref('');
+const sessionExpired = computed(() => route.query.sessionExpired === '1');
 
 const variantMeta = computed(() => variants[selectedVariant.value]);
 
@@ -48,6 +49,9 @@ const handleSubmit = async () => {
 <template>
   <section class="auth-card">
     <header>
+      <p v-if="sessionExpired" class="session-expired">
+        Oturum süren doldu. Lütfen yeniden giriş yap.
+      </p>
       <p class="eyebrow">Trendyol Lecture Portal</p>
       <h1>{{ variantMeta.label }}</h1>
       <p class="subtitle">
@@ -112,3 +116,15 @@ const handleSubmit = async () => {
     </p>
   </section>
 </template>
+
+<style scoped>
+.session-expired {
+  background-color: #fff4f4;
+  border: 1px solid #f5cccc;
+  color: #8c1c1c;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  font-weight: 600;
+}
+</style>
