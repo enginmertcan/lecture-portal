@@ -80,18 +80,60 @@ export const useAuthStore = defineStore('auth', {
     identityNo: initialMeta.subject,
     loading: false,
     error: null,
+    profile: null,
+    profileLoading: false,
   }),
   getters: {
     isAuthenticated: (state) => Boolean(state.accessToken),
     hasRole: (state) => (role) => state.roles.includes(normalizeRoleName(role)),
     hasAnyRole: (state) => (roles = []) =>
       roles.some((role) => state.roles.includes(normalizeRoleName(role))),
+    primaryRole: (state) => {
+      if (!state.roles.length) return '';
+      return state.roles[0].replace('ROLE_', '');
+    },
   },
   actions: {
     updateFromAccessToken(token) {
       const meta = getTokenMeta(token);
       this.roles = meta.roles;
       this.identityNo = meta.subject;
+    },
+    async ensureProfile() {
+      if (!this.isAuthenticated || this.profile || this.profileLoading) {
+        return this.profile;
+      }
+      try {
+        return await this.fetchProfile();
+      } catch (error) {
+        console.warn('Profil yüklenemedi', error);
+        return null;
+      }
+    },
+    async fetchProfile() {
+      if (!this.isAuthenticated) {
+        this.profile = null;
+        return null;
+      }
+      this.profileLoading = true;
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/users/me`, {
+          headers: {
+            Authorization: `Bearer ${this.accessToken}`,
+          },
+        });
+        if (!response.ok) {
+          throw new Error('Profil bilgileri getirilemedi');
+        }
+        const data = await response.json();
+        this.profile = data;
+        return data;
+      } catch (error) {
+        this.profile = null;
+        throw error;
+      } finally {
+        this.profileLoading = false;
+      }
     },
     async login({ identityNo, password }) {
       this.loading = true;
@@ -109,6 +151,7 @@ export const useAuthStore = defineStore('auth', {
 
         const data = await response.json();
         this.setTokens(data);
+        await this.ensureProfile();
         return data;
       } catch (err) {
         this.error = err.message || 'Oturum açılırken bir hata oluştu';
@@ -141,8 +184,10 @@ export const useAuthStore = defineStore('auth', {
       this.accessToken = accessToken;
       this.refreshToken = refreshToken;
       this.updateFromAccessToken(accessToken);
+      this.profile = null;
       writeToStorage(STORAGE_KEYS.access, accessToken);
       writeToStorage(STORAGE_KEYS.refresh, refreshToken);
+      this.ensureProfile();
     },
     logout() {
       this.accessToken = null;
@@ -150,6 +195,7 @@ export const useAuthStore = defineStore('auth', {
       this.roles = [];
       this.identityNo = null;
       this.error = null;
+      this.profile = null;
       writeToStorage(STORAGE_KEYS.access, null);
       writeToStorage(STORAGE_KEYS.refresh, null);
     },

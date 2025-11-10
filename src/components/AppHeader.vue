@@ -9,19 +9,24 @@ const router = useRouter();
 const authStore = useAuthStore();
 
 const links = [
-  { label: 'Panel', to: '/', name: 'dashboard' },
-  { label: 'Dersler', to: '/lectures', name: 'lectures' },
-  { label: 'Program', to: '/schedules', name: 'schedules' },
-  { label: 'Sınıflar', to: '/classrooms', name: 'classrooms' },
-  { label: 'Slotlar', to: '/slots', name: 'slots' },
-  { label: 'Not Bileşenleri', to: '/grade-components', name: 'gradeComponents' },
+  { label: 'Panel', to: '/', name: 'dashboard', roles: ['ADMIN', 'TEACHER', 'STUDENT'] },
+  { label: 'Dersler', to: '/lectures', name: 'lectures', roles: ['ADMIN', 'TEACHER', 'STUDENT'] },
+  { label: 'Program', to: '/schedules', name: 'schedules', roles: ['ADMIN', 'TEACHER', 'STUDENT'] },
+  { label: 'Sınıflar', to: '/classrooms', name: 'classrooms', roles: ['ADMIN', 'TEACHER'] },
+  { label: 'Slotlar', to: '/slots', name: 'slots', roles: ['ADMIN'] },
+  {
+    label: 'Not Bileşenleri',
+    to: '/grade-components',
+    name: 'gradeComponents',
+    roles: ['ADMIN', 'TEACHER'],
+  },
   { label: 'Kayıtlar', to: '/enrollments', name: 'enrollments', roles: ['ADMIN', 'TEACHER'] },
   { label: 'Veri Seti', to: '/bootstrap', name: 'bootstrap', roles: ['ADMIN'] },
   { label: 'Kullanıcılar', to: '/users', name: 'users', roles: ['ADMIN'] },
 ];
 
 const visibleLinks = computed(() =>
-  links.filter((link) => !link.roles || authStore.hasAnyRole(link.roles))
+  links.filter((link) => authStore.hasAnyRole(link.roles))
 );
 
 const roleLabel = computed(() => {

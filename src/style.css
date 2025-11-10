@@ -533,6 +533,10 @@ tbody tr.active {
   color: #64748b;
 }
 
+.status.success {
+  color: #15803d;
+}
+
 .search-input {
   border: 1px solid #cbd5f5;
   border-radius: 12px;
@@ -601,6 +605,13 @@ tbody tr.active {
   color: #047857;
 }
 
+.pill-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+
 .card-header {
   display: flex;
   align-items: center;
@@ -639,6 +650,34 @@ tbody tr.active {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
+}
+
+.suggest-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.suggest-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem;
+  background: #f8fafc;
+}
+
+.suggest-card strong {
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.suggest-card p {
+  margin: 0 0 0.35rem;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.suggest-card small {
+  color: #64748b;
 }
 
 .filter-select {

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import httpClient from '../api/httpClient';
 import { useAuthStore } from '../stores/auth';
 import InfoHint from '../components/InfoHint.vue';
@@ -32,6 +32,33 @@ const formError = ref('');
 
 const authStore = useAuthStore();
 const canManageLectures = computed(() => authStore.hasAnyRole(['ADMIN', 'TEACHER']));
+const isStudent = computed(() => authStore.hasRole('STUDENT'));
+const profileId = computed(() => authStore.profile?.id || null);
+
+const statusLabels = {
+  PENDING_APPROVAL: 'Onay bekliyor',
+  WAITING: 'Bekleme listesi',
+  ACTIVE: 'Aktif',
+  COMPLETED: 'Tamamlandı',
+  DROPPED: 'İptal edildi',
+};
+
+const myEnrollments = ref([]);
+const myEnrollmentsLoading = ref(false);
+const myEnrollmentsError = ref('');
+const enrollmentState = reactive({
+  loading: false,
+  error: '',
+  success: '',
+});
+
+const studentEnrollmentMap = computed(() => {
+  const map = new Map();
+  myEnrollments.value.forEach((enrollment) => {
+    map.set(enrollment.lectureId, enrollment);
+  });
+  return map;
+});
 
 const fetchLectures = async () => {
   loading.value = true;
@@ -166,7 +193,92 @@ const prevPage = () => {
   }
 };
 
+const fetchMyEnrollments = async () => {
+  if (!isStudent.value || !profileId.value) {
+    myEnrollments.value = [];
+    return;
+  }
+  myEnrollmentsLoading.value = true;
+  myEnrollmentsError.value = '';
+  try {
+    const { data } = await httpClient.get(`/api/enrollments/student/${profileId.value}`);
+    myEnrollments.value = data;
+  } catch (err) {
+    myEnrollmentsError.value = err.response?.data?.message || 'Kayıtların alınmasında sorun oluştu';
+    myEnrollments.value = [];
+  } finally {
+    myEnrollmentsLoading.value = false;
+  }
+};
+
+const enrollmentStatusLabel = (status) => statusLabels[status] || status;
+
+const formatEnrollmentDate = (value) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '-';
+  }
+  return date.toLocaleDateString('tr-TR', { dateStyle: 'medium' });
+};
+
+const enrollInLecture = async (lecture) => {
+  if (!profileId.value) {
+    enrollmentState.error = 'Profil bilgisi yüklenemiyor. Lütfen yeniden giriş yap.';
+    return;
+  }
+  enrollmentState.loading = true;
+  enrollmentState.error = '';
+  enrollmentState.success = '';
+  try {
+    await httpClient.post('/api/enrollments', {
+      lectureId: lecture.id,
+      studentId: profileId.value,
+    });
+    enrollmentState.success = `"${lecture.name}" dersine kayıt talebin alındı.`;
+    await fetchMyEnrollments();
+  } catch (err) {
+    enrollmentState.error =
+      err.response?.data?.message || 'Kayıt talebi gönderilemedi. Kontenjan dolu olabilir.';
+  } finally {
+    enrollmentState.loading = false;
+  }
+};
+
+const dropEnrollment = async (enrollment, lecture) => {
+  const confirmed = window.confirm(
+    `"${lecture.name}" dersindeki kaydını iptal etmek istediğine emin misin?`
+  );
+  if (!confirmed) return;
+  enrollmentState.loading = true;
+  enrollmentState.error = '';
+  enrollmentState.success = '';
+  try {
+    await httpClient.post(`/api/enrollments/${enrollment.id}/drop`);
+    enrollmentState.success = `"${lecture.name}" kaydın iptal edildi.`;
+    await fetchMyEnrollments();
+  } catch (err) {
+    enrollmentState.error = err.response?.data?.message || 'Kayıt iptal edilemedi.';
+  } finally {
+    enrollmentState.loading = false;
+  }
+};
+
+watch(
+  () => ({
+    role: isStudent.value,
+    id: profileId.value,
+  }),
+  ({ role, id }) => {
+    if (role && id) {
+      fetchMyEnrollments();
+    }
+  },
+  { immediate: true }
+);
+
 onMounted(() => {
+  authStore.ensureProfile();
   fetchLectures();
   fetchTeachers();
 });
@@ -189,6 +301,10 @@ onMounted(() => {
         </h1>
         <p>
           Ders oluştur, güncel listeyi filtrele ve seçtiğin dersin programını/grade component’lerini incele.
+          <template v-if="isStudent">
+            Derslere buradan kayıt olabilir, kayıt durumunu (pending/waiting/active) anlık olarak takip
+            edebilirsin.
+          </template>
         </p>
       </div>
       <input
@@ -210,6 +326,7 @@ onMounted(() => {
                 <th>Açıklama</th>
                 <th>Kontenjan</th>
                 <th>Öğretmen</th>
+                <th v-if="isStudent">Kayıt Durumu</th>
                 <th></th>
               </tr>
             </thead>
@@ -228,14 +345,46 @@ onMounted(() => {
                   <div>{{ lecture.teacherName || 'Atanmadı' }}</div>
                   <small v-if="lecture.teacherId">#{{ lecture.teacherId }}</small>
                 </td>
+                <td v-if="isStudent">
+                  <template v-if="studentEnrollmentMap.get(lecture.id)">
+                    <span class="pill secondary">
+                      {{ enrollmentStatusLabel(studentEnrollmentMap.get(lecture.id).status) }}
+                    </span>
+                    <p class="hint">
+                      Güncelleme:
+                      {{ formatEnrollmentDate(studentEnrollmentMap.get(lecture.id).enrolledAt) }}
+                    </p>
+                  </template>
+                  <p v-else class="hint">Henüz kayıtlı değilsin</p>
+                </td>
                 <td>
-                  <button
-                    v-if="canManageLectures"
-                    class="ghost tiny"
-                    @click.stop="deleteLecture(lecture)"
-                  >
-                    Sil
-                  </button>
+                  <div class="action-buttons">
+                    <button
+                      v-if="canManageLectures"
+                      class="ghost tiny"
+                      @click.stop="deleteLecture(lecture)"
+                    >
+                      Sil
+                    </button>
+                    <template v-if="isStudent">
+                      <button
+                        v-if="!studentEnrollmentMap.get(lecture.id)"
+                        class="ghost tiny"
+                        :disabled="enrollmentState.loading"
+                        @click.stop="enrollInLecture(lecture)"
+                      >
+                        {{ enrollmentState.loading ? 'Gönderiliyor...' : 'Kayıt ol' }}
+                      </button>
+                      <button
+                        v-else
+                        class="ghost tiny danger"
+                        :disabled="enrollmentState.loading"
+                        @click.stop="dropEnrollment(studentEnrollmentMap.get(lecture.id), lecture)"
+                      >
+                        Kaydı iptal et
+                      </button>
+                    </template>
+                  </div>
                 </td>
               </tr>
               <tr v-if="!loading && !filteredLectures.length">
@@ -245,6 +394,14 @@ onMounted(() => {
           </table>
           <p v-if="loading" class="status">Dersler yükleniyor...</p>
           <p v-if="error" class="error status">{{ error }}</p>
+        </div>
+        <div v-if="isStudent" class="student-enrollment-state">
+          <p v-if="myEnrollmentsLoading" class="status">Kayıt durumun güncelleniyor...</p>
+          <p v-if="myEnrollmentsError" class="error status">{{ myEnrollmentsError }}</p>
+          <p v-if="enrollmentState.error" class="error status">{{ enrollmentState.error }}</p>
+          <p v-if="enrollmentState.success" class="status success">
+            {{ enrollmentState.success }}
+          </p>
         </div>
 
         <footer class="table-footer">

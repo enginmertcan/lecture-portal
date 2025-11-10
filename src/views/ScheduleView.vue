@@ -1,7 +1,8 @@
 <script setup>
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import httpClient from '../api/httpClient';
 import InfoHint from '../components/InfoHint.vue';
+import { useAuthStore } from '../stores/auth';
 
 const schedules = ref([]);
 const loading = ref(false);
@@ -11,6 +12,9 @@ const formLoading = ref(false);
 const lectureOptions = ref([]);
 const classroomOptions = ref([]);
 const slotOptions = ref([]);
+const mySchedules = ref([]);
+const myLoading = ref(false);
+const myError = ref('');
 
 const scheduleForm = reactive({
   lectureId: '',
@@ -20,7 +24,26 @@ const scheduleForm = reactive({
   endDate: '',
 });
 
+const authStore = useAuthStore();
+const canManageSchedules = computed(() => authStore.hasAnyRole(['ADMIN', 'TEACHER']));
+const isStudentView = computed(() => !canManageSchedules.value && authStore.hasRole('STUDENT'));
+
+const dayLabels = {
+  MONDAY: 'Pazartesi',
+  TUESDAY: 'Salı',
+  WEDNESDAY: 'Çarşamba',
+  THURSDAY: 'Perşembe',
+  FRIDAY: 'Cuma',
+  SATURDAY: 'Cumartesi',
+  SUNDAY: 'Pazar',
+};
+
+const dayOrder = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+
 const fetchSchedules = async () => {
+  if (!canManageSchedules.value) {
+    return;
+  }
   loading.value = true;
   error.value = '';
   try {
@@ -36,6 +59,9 @@ const fetchSchedules = async () => {
 };
 
 const fetchLookups = async () => {
+  if (!canManageSchedules.value) {
+    return;
+  }
   try {
     const [lecturesRes, classroomRes, slotRes] = await Promise.all([
       httpClient.get('/api/lectures', { params: { page: 0, pageSize: 50 } }),
@@ -60,6 +86,10 @@ const fetchLookups = async () => {
 };
 
 const createSchedule = async () => {
+  if (!canManageSchedules.value) {
+    formError.value = 'Bu işlem için yetkin yok.';
+    return;
+  }
   formLoading.value = true;
   formError.value = '';
   try {
@@ -73,6 +103,9 @@ const createSchedule = async () => {
 };
 
 const deleteSchedule = async (slot) => {
+  if (!canManageSchedules.value) {
+    return;
+  }
   const confirmed = window.confirm(`${slot.lectureName} oturumunu silmek istiyor musun?`);
   if (!confirmed) return;
   try {
@@ -83,14 +116,79 @@ const deleteSchedule = async (slot) => {
   }
 };
 
+const fetchMySchedules = async () => {
+  if (!authStore.isAuthenticated) {
+    mySchedules.value = [];
+    return;
+  }
+  myLoading.value = true;
+  myError.value = '';
+  try {
+    const { data } = await httpClient.get('/api/lecture-schedules/my');
+    mySchedules.value = data;
+  } catch (err) {
+    myError.value = err.response?.data?.message || 'Kişisel program alınamadı';
+  } finally {
+    myLoading.value = false;
+  }
+};
+
+const normalizeTime = (value) => (value ? value.slice(0, 5) : '--:--');
+const formatTimeRange = (start, end) => `${normalizeTime(start)} - ${normalizeTime(end)}`;
+const formatDay = (value) => dayLabels[value] || value || '-';
+const formatDateRange = (start, end) => {
+  if (!start && !end) {
+    return 'Tarih belirtilmedi';
+  }
+  return `${start || 'Süresiz'} → ${end || 'Süresiz'}`;
+};
+
+const sortedMySchedules = computed(() => {
+  const orderValue = (day) => {
+    const index = dayOrder.indexOf(day);
+    return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+  };
+  return [...mySchedules.value].sort((a, b) => {
+    const dayDiff = orderValue(a.dayOfWeek) - orderValue(b.dayOfWeek);
+    if (dayDiff !== 0) {
+      return dayDiff;
+    }
+    return normalizeTime(a.startTime).localeCompare(normalizeTime(b.startTime));
+  });
+});
+
+watch(
+  () => canManageSchedules.value,
+  async (value) => {
+    if (value) {
+      await fetchLookups();
+      await fetchSchedules();
+    } else {
+      schedules.value = [];
+    }
+  },
+  { immediate: true }
+);
+
+watch(
+  () => isStudentView.value,
+  async (value) => {
+    if (value) {
+      await fetchMySchedules();
+    } else {
+      mySchedules.value = [];
+    }
+  },
+  { immediate: true }
+);
+
 onMounted(() => {
-  fetchLookups();
-  fetchSchedules();
+  authStore.ensureProfile();
 });
 </script>
 
 <template>
-  <section class="layout-grid">
+  <section v-if="canManageSchedules" class="layout-grid">
     <header class="section-headline">
       <div>
         <p class="eyebrow">Planlama</p>
@@ -190,5 +288,38 @@ onMounted(() => {
         </form>
       </article>
     </div>
+  </section>
+
+  <section v-else class="layout-grid">
+    <header class="section-headline">
+      <div>
+        <p class="eyebrow">Programım</p>
+        <h1>Derslerimin takvimi</h1>
+        <p>Kayıtlı olduğun dersler ve onlara ait oturumlar burada listelenir.</p>
+      </div>
+      <button class="ghost" @click="fetchMySchedules" :disabled="myLoading">
+        {{ myLoading ? 'Yenileniyor...' : 'Yenile' }}
+      </button>
+    </header>
+
+    <article class="card">
+      <p v-if="myLoading" class="status">Programın yükleniyor...</p>
+      <p v-if="myError" class="error">{{ myError }}</p>
+      <ul v-if="!myLoading && !myError && sortedMySchedules.length" class="resource-list">
+        <li v-for="session in sortedMySchedules" :key="session.id">
+          <div>
+            <strong>{{ session.lectureName }}</strong>
+            <p class="date-range">
+              {{ formatDay(session.dayOfWeek) }} · {{ formatTimeRange(session.startTime, session.endTime) }}
+            </p>
+            <small>{{ formatDateRange(session.startDate, session.endDate) }}</small>
+          </div>
+          <span class="pill">{{ session.classroomName }}</span>
+        </li>
+      </ul>
+      <p v-if="!myLoading && !myError && !sortedMySchedules.length" class="status">
+        Kayıtlı olduğun dersler için planlanmış bir oturum bulunamadı.
+      </p>
+    </article>
   </section>
 </template>

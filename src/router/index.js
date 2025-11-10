@@ -49,19 +49,19 @@ const routes = [
     path: '/classrooms',
     name: 'classrooms',
     component: ClassroomsView,
-    meta: { requiresAuth: true },
+    meta: { requiresAuth: true, roles: ['ADMIN', 'TEACHER'] },
   },
   {
     path: '/slots',
     name: 'slots',
     component: ScheduleSlotsView,
-    meta: { requiresAuth: true },
+    meta: { requiresAuth: true, roles: ['ADMIN'] },
   },
   {
     path: '/grade-components',
     name: 'gradeComponents',
     component: GradeComponentsView,
-    meta: { requiresAuth: true },
+    meta: { requiresAuth: true, roles: ['ADMIN', 'TEACHER'] },
   },
   {
     path: '/enrollments',
