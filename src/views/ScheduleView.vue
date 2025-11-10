@@ -157,6 +157,53 @@ const sortedMySchedules = computed(() => {
   });
 });
 
+const parseTimeToMinutes = (time) => {
+  if (!time) return 0;
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours * 60 + minutes;
+};
+
+const timetableSlots = computed(() => {
+  const keys = new Map();
+  mySchedules.value.forEach((session) => {
+    const key = `${session.startTime || ''}|${session.endTime || ''}`;
+    if (!keys.has(key)) {
+      keys.set(key, {
+        key,
+        start: session.startTime,
+        end: session.endTime,
+        order: parseTimeToMinutes(session.startTime),
+      });
+    }
+  });
+  return [...keys.values()].sort((a, b) => a.order - b.order);
+});
+
+const timetableMatrix = computed(() => {
+  const matrix = {};
+  dayOrder.forEach((day) => {
+    matrix[day] = {};
+    timetableSlots.value.forEach(({ key }) => {
+      matrix[day][key] = [];
+    });
+  });
+  mySchedules.value.forEach((session) => {
+    const day = session.dayOfWeek;
+    const key = `${session.startTime || ''}|${session.endTime || ''}`;
+    if (matrix[day] && matrix[day][key]) {
+      matrix[day][key].push(session);
+    }
+  });
+  return matrix;
+});
+
+const formatTimeSlotLabel = (slot) => {
+  if (!slot.start && !slot.end) {
+    return 'Belirtilmedi';
+  }
+  return `${normalizeTime(slot.start)} - ${normalizeTime(slot.end)}`;
+};
+
 watch(
   () => canManageSchedules.value,
   async (value) => {
@@ -217,8 +264,8 @@ onMounted(() => {
             <header>
               <div>
                 <p class="eyebrow">#{{ item.id }}</p>
-                <h2>{{ item.lectureName }}</h2>
-                <p>Classroom: {{ item.classroomName }} (#{{ item.classroomId }})</p>
+                <h2>{{ item.lectureName }} • {{ item.classroomName }}</h2>
+                <p>Konum: {{ item.classroomName }} (#{{ item.classroomId }})</p>
               </div>
               <button class="ghost tiny" @click="deleteSchedule(item)">Sil</button>
             </header>
@@ -303,23 +350,42 @@ onMounted(() => {
     </header>
 
     <article class="card">
-      <p v-if="myLoading" class="status">Programın yükleniyor...</p>
-      <p v-if="myError" class="error">{{ myError }}</p>
-      <ul v-if="!myLoading && !myError && sortedMySchedules.length" class="resource-list">
-        <li v-for="session in sortedMySchedules" :key="session.id">
-          <div>
-            <strong>{{ session.lectureName }}</strong>
-            <p class="date-range">
-              {{ formatDay(session.dayOfWeek) }} · {{ formatTimeRange(session.startTime, session.endTime) }}
-            </p>
-            <small>{{ formatDateRange(session.startDate, session.endDate) }}</small>
-          </div>
-          <span class="pill">{{ session.classroomName }}</span>
-        </li>
-      </ul>
+      <header class="card-header">
+        <div>
+          <p class="eyebrow">Haftalık görünüm</p>
+          <h2>Ders takvimi</h2>
+        </div>
+      </header>
+      <div class="timetable-wrapper">
+        <table class="timetable">
+          <thead>
+            <tr>
+              <th>Saat</th>
+              <th v-for="day in dayOrder" :key="day">{{ formatDay(day) }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="slot in timetableSlots" :key="slot.key">
+              <td class="time-cell">{{ formatTimeSlotLabel(slot) }}</td>
+              <td v-for="day in dayOrder" :key="`${slot.key}-${day}`">
+                <div
+                  v-for="session in timetableMatrix[day][slot.key]"
+                  :key="session.id"
+                  class="timetable-cell"
+                >
+                  <strong>{{ session.lectureName }}</strong>
+                  <small>{{ session.classroomName }}</small>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <p v-if="!myLoading && !myError && !sortedMySchedules.length" class="status">
         Kayıtlı olduğun dersler için planlanmış bir oturum bulunamadı.
       </p>
+      <p v-if="myLoading" class="status">Programın yükleniyor...</p>
+      <p v-if="myError" class="error">{{ myError }}</p>
     </article>
   </section>
 </template>

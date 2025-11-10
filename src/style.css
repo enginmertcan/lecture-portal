@@ -740,6 +740,53 @@ tbody tr.active {
   color: #64748b;
 }
 
+.timetable-wrapper {
+  overflow-x: auto;
+}
+
+.timetable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.timetable th,
+.timetable td {
+  border: 1px solid #e2e8f0;
+  padding: 0.5rem;
+  vertical-align: top;
+  min-width: 120px;
+}
+
+.timetable th {
+  background: #f8fafc;
+  text-align: left;
+}
+
+.time-cell {
+  font-weight: 600;
+  width: 120px;
+}
+
+.timetable-cell {
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 0.35rem;
+  margin-bottom: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.timetable-cell strong {
+  font-size: 0.85rem;
+  color: #111827;
+}
+
+.timetable-cell small {
+  color: #64748b;
+}
+
 .filter-select {
   border: 1px solid #cbd5f5;
   border-radius: 8px;
