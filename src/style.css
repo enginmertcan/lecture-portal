@@ -652,6 +652,51 @@ tbody tr.active {
   gap: 0.35rem;
 }
 
+.admin-actions {
+  justify-content: flex-start;
+  margin-bottom: 1rem;
+}
+
+.capacity-panel {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  background: #f8fafc;
+  margin: 1rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.capacity-panel__row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.capacity-panel__stats {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.capacity-meter {
+  width: 220px;
+  height: 6px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+  margin: 0.25rem 0;
+}
+
+.capacity-meter__bar {
+  height: 100%;
+  background: #6366f1;
+  border-radius: inherit;
+  transition: width 0.2s ease;
+}
+
 .suggest-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

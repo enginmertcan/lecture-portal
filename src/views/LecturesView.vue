@@ -19,6 +19,12 @@ const teacherOptions = ref([]);
 const gradeComponents = ref([]);
 const gradeLoading = ref(false);
 const gradeError = ref('');
+const lectureEnrollments = ref([]);
+const lectureEnrollmentStats = reactive({
+  active: 0,
+  waiting: 0,
+  pending: 0,
+});
 
 const lectureForm = reactive({
   name: '',
@@ -127,10 +133,42 @@ const fetchGradeComponents = async (lectureId) => {
   }
 };
 
+const resetLectureEnrollmentStats = () => {
+  lectureEnrollmentStats.active = 0;
+  lectureEnrollmentStats.waiting = 0;
+  lectureEnrollmentStats.pending = 0;
+};
+
+const computeLectureEnrollmentStats = () => {
+  resetLectureEnrollmentStats();
+  lectureEnrollments.value.forEach((enrollment) => {
+    if (enrollment.status === 'ACTIVE') lectureEnrollmentStats.active += 1;
+    if (enrollment.status === 'WAITING') lectureEnrollmentStats.waiting += 1;
+    if (enrollment.status === 'PENDING_APPROVAL') lectureEnrollmentStats.pending += 1;
+  });
+};
+
+const fetchLectureEnrollments = async (lectureId) => {
+  if (!isStudent.value || !lectureId) {
+    lectureEnrollments.value = [];
+    resetLectureEnrollmentStats();
+    return;
+  }
+  try {
+    const { data } = await httpClient.get(`/api/enrollments/lecture/${lectureId}`);
+    lectureEnrollments.value = data || [];
+  } catch {
+    lectureEnrollments.value = [];
+  } finally {
+    computeLectureEnrollmentStats();
+  }
+};
+
 const handleSelectLecture = (lecture) => {
   selectedLecture.value = lecture;
   fetchLectureSchedule(lecture.id);
   fetchGradeComponents(lecture.id);
+  fetchLectureEnrollments(lecture.id);
 };
 
 const createLecture = async () => {
@@ -176,6 +214,21 @@ const filteredLectures = computed(() => {
   }
   return lectures.value.filter((lecture) =>
     lecture.name.toLowerCase().includes(searchTerm.value.trim().toLowerCase())
+  );
+});
+
+const selectedEnrollment = computed(() => {
+  if (!selectedLecture.value) return null;
+  return studentEnrollmentMap.value.get(selectedLecture.value.id) || null;
+});
+
+const capacityUsage = computed(() => {
+  if (!selectedLecture.value || !selectedLecture.value.capacity) {
+    return 0;
+  }
+  return Math.min(
+    100,
+    Math.round((lectureEnrollmentStats.active / selectedLecture.value.capacity) * 100)
   );
 });
 
@@ -277,6 +330,21 @@ watch(
   { immediate: true }
 );
 
+watch(
+  () => ({
+    lectureId: selectedLecture.value?.id,
+    role: isStudent.value,
+  }),
+  ({ lectureId, role }) => {
+    if (role && lectureId) {
+      fetchLectureEnrollments(lectureId);
+    } else {
+      lectureEnrollments.value = [];
+      resetLectureEnrollmentStats();
+    }
+  }
+);
+
 onMounted(() => {
   authStore.ensureProfile();
   fetchLectures();
@@ -327,7 +395,7 @@ onMounted(() => {
                 <th>Kontenjan</th>
                 <th>Öğretmen</th>
                 <th v-if="isStudent">Kayıt Durumu</th>
-                <th></th>
+                <th v-if="canManageLectures"></th>
               </tr>
             </thead>
             <tbody>
@@ -357,34 +425,8 @@ onMounted(() => {
                   </template>
                   <p v-else class="hint">Henüz kayıtlı değilsin</p>
                 </td>
-                <td>
-                  <div class="action-buttons">
-                    <button
-                      v-if="canManageLectures"
-                      class="ghost tiny"
-                      @click.stop="deleteLecture(lecture)"
-                    >
-                      Sil
-                    </button>
-                    <template v-if="isStudent">
-                      <button
-                        v-if="!studentEnrollmentMap.get(lecture.id)"
-                        class="ghost tiny"
-                        :disabled="enrollmentState.loading"
-                        @click.stop="enrollInLecture(lecture)"
-                      >
-                        {{ enrollmentState.loading ? 'Gönderiliyor...' : 'Kayıt ol' }}
-                      </button>
-                      <button
-                        v-else
-                        class="ghost tiny danger"
-                        :disabled="enrollmentState.loading"
-                        @click.stop="dropEnrollment(studentEnrollmentMap.get(lecture.id), lecture)"
-                      >
-                        Kaydı iptal et
-                      </button>
-                    </template>
-                  </div>
+                <td v-if="canManageLectures">
+                  <button class="ghost tiny" @click.stop="deleteLecture(lecture)">Sil</button>
                 </td>
               </tr>
               <tr v-if="!loading && !filteredLectures.length">
@@ -472,6 +514,43 @@ onMounted(() => {
           <strong>{{ selectedLecture.teacherName }}</strong>
           <span v-if="selectedLecture.teacherId">(#{{ selectedLecture.teacherId }})</span>
         </p>
+
+        <div v-if="isStudent" class="capacity-panel">
+          <div class="capacity-panel__row">
+            <div>
+              <p class="eyebrow">Kontenjan durumu</p>
+              <div class="capacity-meter">
+                <div class="capacity-meter__bar" :style="{ width: `${capacityUsage}%` }"></div>
+              </div>
+              <small>{{ lectureEnrollmentStats.active }} / {{ selectedLecture.capacity }} aktif öğrenci</small>
+            </div>
+            <div class="capacity-panel__stats">
+              <span class="pill success">{{ lectureEnrollmentStats.pending }} onay kuyruğu</span>
+              <span class="pill secondary">{{ lectureEnrollmentStats.waiting }} bekleme</span>
+            </div>
+          </div>
+          <p v-if="selectedEnrollment?.waitlistPosition" class="hint">
+            Bekleme sırası: #{{ selectedEnrollment.waitlistPosition }}
+          </p>
+          <div class="action-buttons">
+            <button
+              v-if="!selectedEnrollment"
+              class="ghost"
+              :disabled="enrollmentState.loading"
+              @click="enrollInLecture(selectedLecture)"
+            >
+              {{ enrollmentState.loading ? 'Gönderiliyor...' : 'Bu derse kayıt ol' }}
+            </button>
+            <button
+              v-else
+              class="ghost danger"
+              :disabled="enrollmentState.loading"
+              @click="dropEnrollment(selectedEnrollment, selectedLecture)"
+            >
+              Kaydı iptal et
+            </button>
+          </div>
+        </div>
 
         <div class="schedule-wrapper">
           <p v-if="scheduleLoading" class="status">Program yükleniyor...</p>

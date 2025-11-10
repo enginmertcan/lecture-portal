@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import httpClient from '../api/httpClient';
 import { useAuthStore } from '../stores/auth';
 
@@ -73,6 +73,21 @@ const studentState = reactive({
   catalog: [],
   schedules: [],
 });
+
+const alertFilter = ref('ALL');
+const alertOptions = [
+  { label: 'Tüm uyarılar', value: 'ALL' },
+  { label: 'Kontenjan', value: 'CAPACITY' },
+  { label: 'Bekleme', value: 'WAITLIST' },
+  { label: 'Onay Bekleyen', value: 'PENDING' },
+];
+
+const upcomingRange = ref(7);
+const upcomingRangeOptions = [
+  { label: '7 gün', value: 7 },
+  { label: '14 gün', value: 14 },
+  { label: '30 gün', value: 30 },
+];
 
 const normalizeTime = (value) => (value ? value.slice(0, 5) : '--:--');
 const formatTimeRange = (start, end) => `${normalizeTime(start)} · ${normalizeTime(end)}`;
@@ -275,6 +290,74 @@ const adminEnrollmentFunnelList = computed(() => {
   return preferredOrder.map((status) => ({ status, total: source[status] || 0 }));
 });
 
+const lectureAlertStats = computed(() => {
+  const stats = new Map();
+  adminState.lists.enrollments.forEach((enrollment) => {
+    const entry = stats.get(enrollment.lectureId) || { active: 0, waiting: 0, pending: 0 };
+    if (enrollment.status === 'ACTIVE') entry.active += 1;
+    if (enrollment.status === 'WAITING') entry.waiting += 1;
+    if (enrollment.status === 'PENDING_APPROVAL') entry.pending += 1;
+    stats.set(enrollment.lectureId, entry);
+  });
+  return stats;
+});
+
+const adminAlerts = computed(() => {
+  const now = Date.now();
+  const alerts = [];
+  adminState.lists.lectures.forEach((lecture) => {
+    const stats = lectureAlertStats.value.get(lecture.id) || { active: 0, waiting: 0, pending: 0 };
+    if (lecture.capacity && stats.active >= lecture.capacity) {
+      alerts.push({ lectureId: lecture.id, lectureName: lecture.name, type: 'CAPACITY', message: 'Kontenjan dolu' });
+    } else if (lecture.capacity && stats.active >= Math.max(lecture.capacity - 1, lecture.capacity * 0.9)) {
+      alerts.push({
+        lectureId: lecture.id,
+        lectureName: lecture.name,
+        type: 'CAPACITY',
+        message: 'Kapasite dolmak üzere',
+      });
+    }
+    if (stats.waiting > 0) {
+      alerts.push({
+        lectureId: lecture.id,
+        lectureName: lecture.name,
+        type: 'WAITLIST',
+        message: `${stats.waiting} öğrenci beklemede`,
+      });
+    }
+  });
+  adminState.lists.enrollments.forEach((enrollment) => {
+    if (enrollment.status === 'PENDING_APPROVAL' && enrollment.enrolledAt) {
+      const ageHours = (now - new Date(enrollment.enrolledAt).getTime()) / 36e5;
+      if (ageHours >= 48) {
+        alerts.push({
+          lectureId: enrollment.lectureId,
+          lectureName: `Kayıt #${enrollment.id}`,
+          type: 'PENDING',
+          message: '48 saattir onay bekliyor',
+        });
+      }
+    }
+  });
+  return alerts;
+});
+
+const filteredAdminAlerts = computed(() => {
+  if (alertFilter.value === 'ALL') {
+    return adminAlerts.value;
+  }
+  return adminAlerts.value.filter((alert) => alert.type === alertFilter.value);
+});
+
+const filteredAdminSchedules = computed(() => {
+  const range = upcomingRange.value;
+  return adminRecentSchedules.value.filter((schedule) => {
+    if (!schedule.startDate) return true;
+    const daysDiff = (new Date(schedule.startDate).getTime() - Date.now()) / 86400000;
+    return daysDiff <= range;
+  });
+});
+
 const teacherEnrollmentsFlat = computed(() =>
   Object.values(teacherState.enrollmentsByLecture)
     .flat()
@@ -308,6 +391,22 @@ const teacherLectureCards = computed(() =>
       available: Math.max(lecture.capacity - active, 0),
     };
   })
+);
+
+const teacherLectureMap = computed(() => {
+  const map = {};
+  teacherState.lectures.forEach((lecture) => {
+    map[lecture.id] = lecture.name;
+  });
+  return map;
+});
+
+const teacherPendingApprovals = computed(() =>
+  teacherEnrollmentsFlat.value.filter((item) => item.status === 'PENDING_APPROVAL')
+);
+
+const teacherGradingQueue = computed(() =>
+  teacherEnrollmentsFlat.value.filter((item) => item.status === 'ACTIVE' && (item.grade === null || item.grade === undefined))
 );
 
 const studentStatusCounts = computed(() => {
@@ -373,6 +472,14 @@ const refreshStudent = () => fetchStudentData();
       </p>
     </div>
 
+    <div class="action-buttons admin-actions">
+      <router-link class="ghost small" to="/lectures">Ders yönetimi</router-link>
+      <router-link class="ghost small" to="/classrooms">Sınıflar</router-link>
+      <router-link class="ghost small" to="/slots">Slotlar</router-link>
+      <router-link class="ghost small" to="/grade-components">Not bileşenleri</router-link>
+      <router-link class="ghost small" to="/enrollments">Kayıt onayları</router-link>
+    </div>
+
     <div v-if="adminSummaryMetrics.length" class="metric-grid">
       <article v-for="metric in adminSummaryMetrics" :key="metric.label" class="card metric">
         <p class="eyebrow">{{ metric.label }}</p>
@@ -393,12 +500,101 @@ const refreshStudent = () => fetchStudentData();
       <article class="card">
         <header class="card-header">
           <div>
+            <p class="eyebrow">Onay bekleyenler</p>
+            <h2>Öğrenci başvuruları</h2>
+          </div>
+          <router-link class="ghost tiny" to="/enrollments">Kayıt ekranı</router-link>
+        </header>
+        <table>
+          <thead>
+            <tr>
+              <th>Kayıt</th>
+              <th>Ders</th>
+              <th>Başlangıç</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in teacherPendingApprovals.slice(0, 5)" :key="item.id">
+              <td>#{{ item.id }}</td>
+              <td>{{ teacherLectureMap[item.lectureId] || `#${item.lectureId}` }}</td>
+              <td>{{ formatDateTime(item.enrolledAt) }}</td>
+            </tr>
+            <tr v-if="!teacherPendingApprovals.length">
+              <td colspan="3">Onay bekleyen kayıt yok.</td>
+            </tr>
+          </tbody>
+        </table>
+      </article>
+
+      <article class="card">
+        <header class="card-header">
+          <div>
+            <p class="eyebrow">Notlandırma</p>
+            <h2>Not bekleyen öğrenciler</h2>
+          </div>
+          <router-link class="ghost tiny" to="/grade-components">Not bileşenleri</router-link>
+        </header>
+        <table>
+          <thead>
+            <tr>
+              <th>Kayıt</th>
+              <th>Ders</th>
+              <th>Kayıt Tarihi</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in teacherGradingQueue.slice(0, 5)" :key="item.id">
+              <td>#{{ item.id }}</td>
+              <td>{{ teacherLectureMap[item.lectureId] || `#${item.lectureId}` }}</td>
+              <td>{{ formatDateTime(item.enrolledAt) }}</td>
+            </tr>
+            <tr v-if="!teacherGradingQueue.length">
+              <td colspan="3">Notlandırma bekleyen öğrenci yok.</td>
+            </tr>
+          </tbody>
+        </table>
+      </article>
+    </div>
+
+    <article class="card">
+      <header class="card-header">
+        <div>
+          <p class="eyebrow">Uyarılar</p>
+          <h2>Kritik ders ve kayıt durumları</h2>
+        </div>
+        <select v-model="alertFilter" class="filter-select">
+          <option v-for="option in alertOptions" :key="option.value" :value="option.value">
+            {{ option.label }}
+          </option>
+        </select>
+      </header>
+      <ul class="resource-list">
+        <li v-for="alert in filteredAdminAlerts" :key="`${alert.type}-${alert.lectureId}-${alert.message}`">
+          <div>
+            <strong>{{ alert.lectureName }}</strong>
+            <p class="date-range">{{ alert.message }}</p>
+          </div>
+          <span class="pill" :class="{ secondary: alert.type !== 'CAPACITY' }">{{ alert.type }}</span>
+        </li>
+        <li v-if="!filteredAdminAlerts.length">Şu anda kritik uyarı bulunmuyor.</li>
+      </ul>
+    </article>
+
+    <div class="grid-2">
+      <article class="card">
+        <header class="card-header">
+          <div>
             <p class="eyebrow">Program</p>
             <h2>Yaklaşan oturumlar</h2>
           </div>
+          <select v-model.number="upcomingRange" class="filter-select">
+            <option v-for="range in upcomingRangeOptions" :key="range.value" :value="range.value">
+              {{ range.label }}
+            </option>
+          </select>
         </header>
         <ul class="resource-list">
-          <li v-for="schedule in adminRecentSchedules" :key="schedule.id">
+          <li v-for="schedule in filteredAdminSchedules" :key="schedule.id">
             <div>
               <strong>{{ schedule.lectureName }}</strong>
               <p class="date-range">
@@ -407,7 +603,7 @@ const refreshStudent = () => fetchStudentData();
             </div>
             <span class="pill secondary">{{ schedule.classroomName }}</span>
           </li>
-          <li v-if="!adminRecentSchedules.length">Henüz programlanmış oturum yok.</li>
+          <li v-if="!filteredAdminSchedules.length">Belirtilen aralıkta oturum yok.</li>
         </ul>
       </article>
 
