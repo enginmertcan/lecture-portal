@@ -14,6 +14,7 @@ const form = reactive({
   identityNo: '',
   name: '',
   surname: '',
+  email: '',
   gender: 'FEMALE',
   role: 'STUDENT',
   password: '',
@@ -61,6 +62,7 @@ const createUser = async () => {
       identityNo: '',
       name: '',
       surname: '',
+      email: '',
       gender: 'FEMALE',
       role: 'STUDENT',
       password: '',
@@ -131,6 +133,7 @@ fetchUsers();
                 <th>ID</th>
                 <th>TC</th>
                 <th>Ad Soyad</th>
+                <th>E-posta</th>
                 <th>Cinsiyet</th>
                 <th>Rol</th>
                 <th></th>
@@ -141,12 +144,13 @@ fetchUsers();
                 <td>#{{ user.id }}</td>
                 <td>{{ user.identityNo }}</td>
                 <td>{{ user.name }} {{ user.surname }}</td>
+                <td>{{ user.email }}</td>
                 <td>{{ user.gender }}</td>
                 <td><span class="pill secondary">{{ user.role }}</span></td>
                 <td><button class="ghost tiny" @click="deleteUser(user)">Sil</button></td>
               </tr>
               <tr v-if="!loading && !users.length">
-                <td colspan="6">Kullanıcı bulunamadı.</td>
+                <td colspan="7">Kullanıcı bulunamadı.</td>
               </tr>
             </tbody>
           </table>
@@ -179,6 +183,10 @@ fetchUsers();
           <label>
             Soyad
             <input v-model="form.surname" required />
+          </label>
+          <label>
+            E-posta
+            <input v-model="form.email" type="email" required />
           </label>
           <label>
             Cinsiyet

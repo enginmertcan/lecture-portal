@@ -16,6 +16,7 @@ const form = ref({
   identityNo: '',
   name: '',
   surname: '',
+  email: '',
   gender: 'FEMALE',
   password: '',
   role: accountTypes[0].value,
@@ -27,10 +28,33 @@ const fieldErrors = reactive({
   identityNo: '',
   name: '',
   surname: '',
+  email: '',
   gender: '',
   password: '',
   role: '',
 });
+
+const verification = reactive({
+  active: false,
+  identityNo: '',
+  email: '',
+  code: '',
+  loading: false,
+  error: '',
+  info: '',
+  success: '',
+});
+
+const resetVerification = () => {
+  verification.active = false;
+  verification.identityNo = '';
+  verification.email = '';
+  verification.code = '';
+  verification.loading = false;
+  verification.error = '';
+  verification.info = '';
+  verification.success = '';
+};
 
 const genders = [
   { label: 'Kadın', value: 'FEMALE' },
@@ -125,23 +149,77 @@ const handleSubmit = async () => {
       const backendMessage = data?.message || data?.errorMessage;
       throw new Error(backendMessage || 'Kayıt oluşturulamadı');
     }
-    authStore.setTokens(data);
-    router.push('/');
+    verification.active = true;
+    verification.identityNo = data.identityNo;
+    verification.email = data.email;
+    verification.code = '';
+    verification.info = data.message || 'E-posta adresine doğrulama kodu gönderildi.';
+    verification.error = '';
+    verification.success = '';
   } catch (err) {
     error.value = err.message || 'Bilinmeyen bir hata oluştu';
   } finally {
     loading.value = false;
   }
 };
+
+const handleVerifyCode = async () => {
+  verification.loading = true;
+  verification.error = '';
+  verification.success = '';
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/auth/verify-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        identityNo: verification.identityNo,
+        code: verification.code,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data?.message || 'Doğrulama kodu kabul edilmedi');
+    }
+    authStore.setTokens(data);
+    router.push('/');
+  } catch (err) {
+    verification.error = err.message || 'Doğrulama tamamlanamadı';
+  } finally {
+    verification.loading = false;
+  }
+};
+
+const handleResendCode = async () => {
+  verification.loading = true;
+  verification.error = '';
+  verification.success = '';
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/auth/resend-verification`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identityNo: verification.identityNo }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data?.message || 'Kod yeniden gönderilemedi');
+    }
+    verification.success = data?.message || 'Yeni doğrulama kodu gönderildi.';
+    verification.info = verification.success;
+  } catch (err) {
+    verification.error = err.message || 'Kod yeniden gönderilemedi';
+  } finally {
+    verification.loading = false;
+  }
+};
 </script>
 
 <template>
-  <section class="auth-card">
+  <section v-if="!verification.active" class="auth-card">
     <header>
       <p class="eyebrow">Yeni Hesap</p>
       <h1>Trendyol Lecture Portal Kaydı</h1>
       <p class="subtitle">
-        IdentityNo benzersiz olmalı. Başarılı kayıt sonrası otomatik giriş yapılır.
+        IdentityNo benzersiz olmalı. Başarılı kayıt sonrası e-posta doğrulaması tamamlanmalıdır.
       </p>
     </header>
 
@@ -202,6 +280,17 @@ const handleSubmit = async () => {
         />
         <small v-if="fieldErrors.surname" class="field-error">{{ fieldErrors.surname }}</small>
       </label>
+      <label :class="{ invalid: fieldErrors.email }">
+        E-posta
+        <input
+          v-model="form.email"
+          type="email"
+          required
+          placeholder="ornek@mail.com"
+          @input="clearFieldError('email')"
+        />
+        <small v-if="fieldErrors.email" class="field-error">{{ fieldErrors.email }}</small>
+      </label>
       <label :class="{ invalid: fieldErrors.gender }">
         Cinsiyet
         <select v-model="form.gender" required @change="clearFieldError('gender')">
@@ -247,5 +336,50 @@ const handleSubmit = async () => {
       Zaten hesabın var mı?
       <RouterLink to="/login">Giriş yap</RouterLink>
     </p>
+  </section>
+
+  <section v-else class="auth-card">
+    <header>
+      <p class="eyebrow">E-posta Doğrulama</p>
+      <h1>{{ verification.email }}</h1>
+      <p class="subtitle">
+        {{ verification.info || 'E-postana gönderilen kodu girerek hesabını aktifleştir.' }}
+      </p>
+    </header>
+
+    <div v-if="verification.error" class="form-error-banner" role="alert">
+      <strong>Doğrulama tamamlanamadı</strong>
+      <span>{{ verification.error }}</span>
+    </div>
+    <p v-if="verification.success" class="status success">{{ verification.success }}</p>
+
+    <form @submit.prevent="handleVerifyCode">
+      <label>
+        Doğrulama Kodu
+        <input
+          v-model="verification.code"
+          type="text"
+          maxlength="6"
+          required
+          placeholder="123456"
+        />
+      </label>
+      <div class="action-row">
+        <button type="submit" :disabled="verification.loading">
+          {{ verification.loading ? 'Doğrulanıyor...' : 'Kodu Onayla' }}
+        </button>
+        <button
+          type="button"
+          class="ghost"
+          :disabled="verification.loading"
+          @click="handleResendCode"
+        >
+          Kodu Yeniden Gönder
+        </button>
+      </div>
+    </form>
+    <button class="ghost small" type="button" :disabled="verification.loading" @click="resetVerification">
+      Farklı kullanıcıyla kayıt ol
+    </button>
   </section>
 </template>
