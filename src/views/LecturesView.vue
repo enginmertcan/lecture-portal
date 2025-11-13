@@ -3,6 +3,10 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import httpClient from '../api/httpClient';
 import { useAuthStore } from '../stores/auth';
 import InfoHint from '../components/InfoHint.vue';
+import LectureListCard from '../components/lectures/LectureListCard.vue';
+import LectureFormCard from '../components/lectures/LectureFormCard.vue';
+import StudentLectureDetailCard from '../components/lectures/StudentLectureDetailCard.vue';
+import TeacherAttendanceCard from '../components/lectures/TeacherAttendanceCard.vue';
 
 const pageSize = 10;
 const lectures = ref([]);
@@ -20,6 +24,16 @@ const gradeComponents = ref([]);
 const gradeLoading = ref(false);
 const gradeError = ref('');
 const lectureEnrollments = ref([]);
+const attendanceWeek = ref(new Date().toISOString().slice(0, 10));
+const attendanceState = reactive({
+  savingId: null,
+  error: '',
+  success: '',
+});
+const attendanceRecords = ref([]);
+const attendanceRecordsLoading = ref(false);
+const attendanceRecordsError = ref('');
+const watchedLectures = ref([]);
 const lectureEnrollmentStats = reactive({
   active: 0,
   waiting: 0,
@@ -39,6 +53,7 @@ const formError = ref('');
 const authStore = useAuthStore();
 const canManageLectures = computed(() => authStore.hasAnyRole(['ADMIN', 'TEACHER']));
 const isStudent = computed(() => authStore.hasRole('STUDENT'));
+const isTeacher = computed(() => authStore.hasRole('TEACHER'));
 const profileId = computed(() => authStore.profile?.id || null);
 
 const statusLabels = {
@@ -66,6 +81,72 @@ const studentEnrollmentMap = computed(() => {
   return map;
 });
 
+const canManageAttendance = computed(() => {
+  if (!selectedLecture.value) return false;
+  if (!isTeacher.value) return false;
+  if (!profileId.value) return false;
+  return selectedLecture.value.teacherId === profileId.value;
+});
+
+const attendanceEligibleEnrollments = computed(() =>
+  lectureEnrollments.value.filter((enrollment) => enrollment.status === 'ACTIVE')
+);
+
+const attendanceLimit = computed(() => {
+  const entry = lectureEnrollments.value.find(
+    (enrollment) => typeof enrollment?.absenceLimit === 'number'
+  );
+  return entry?.absenceLimit || 5;
+});
+
+const isWatchedLecture = computed(() => {
+  if (!selectedLecture.value) return false;
+  return watchedLectures.value.includes(selectedLecture.value.id);
+});
+
+const seatAlertStatus = computed(() => {
+  if (!isStudent.value || !selectedLecture.value) {
+    return { message: '', available: 0, active: false };
+  }
+  if (!isWatchedLecture.value) {
+    return { message: 'Kontenjan uyarısı kapalı.', available: 0, active: false };
+  }
+  const available = Math.max(
+    (selectedLecture.value.capacity || 0) - (lectureEnrollmentStats.active || 0),
+    0
+  );
+  if (available > 0) {
+    return {
+      message: `${available} boş kontenjan var! Hemen kayıt olabilirsin.`,
+      available,
+      active: true,
+    };
+  }
+  return {
+    message: 'Kontenjan takibinde. Yer açılınca bilgilendirileceksin.',
+    available: 0,
+    active: false,
+  };
+});
+
+const selectedEnrollmentAbsenceLimit = computed(
+  () => selectedEnrollment.value?.absenceLimit ?? attendanceLimit.value
+);
+
+const remainingAbsence = computed(() => {
+  if (!selectedEnrollmentAbsenceLimit.value && selectedEnrollmentAbsenceLimit.value !== 0) {
+    return null;
+  }
+  const used = selectedEnrollment.value?.absenceCount || 0;
+  return Math.max((selectedEnrollmentAbsenceLimit.value || 0) - used, 0);
+});
+
+const lastAbsenceRecord = computed(() => {
+  const absences = attendanceRecords.value.filter((record) => record && record.attended === false);
+  if (!absences.length) return null;
+  return absences[absences.length - 1];
+});
+
 const fetchLectures = async () => {
   loading.value = true;
   error.value = '';
@@ -85,6 +166,48 @@ const fetchLectures = async () => {
   } finally {
     loading.value = false;
   }
+};
+
+const watchlistStorageKey = computed(() =>
+  profileId.value ? `lecture_watchlist_${profileId.value}` : ''
+);
+
+const loadWatchlist = () => {
+  if (typeof window === 'undefined' || !isStudent.value || !profileId.value) {
+    watchedLectures.value = [];
+    return;
+  }
+  try {
+    const raw = window.localStorage.getItem(watchlistStorageKey.value);
+    const parsed = raw ? JSON.parse(raw) : [];
+    watchedLectures.value = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    watchedLectures.value = [];
+  }
+};
+
+const persistWatchlist = () => {
+  if (typeof window === 'undefined' || !profileId.value) {
+    return;
+  }
+  try {
+    window.localStorage.setItem(watchlistStorageKey.value, JSON.stringify(watchedLectures.value));
+  } catch {
+    // ignore storage errors
+  }
+};
+
+const toggleLectureWatch = (lecture) => {
+  if (!lecture || !isStudent.value || !profileId.value) {
+    return;
+  }
+  const index = watchedLectures.value.indexOf(lecture.id);
+  if (index === -1) {
+    watchedLectures.value.push(lecture.id);
+  } else {
+    watchedLectures.value.splice(index, 1);
+  }
+  persistWatchlist();
 };
 
 const fetchTeachers = async () => {
@@ -149,7 +272,7 @@ const computeLectureEnrollmentStats = () => {
 };
 
 const fetchLectureEnrollments = async (lectureId) => {
-  if (!isStudent.value || !lectureId) {
+  if (!lectureId || (!isStudent.value && !canManageLectures.value)) {
     lectureEnrollments.value = [];
     resetLectureEnrollmentStats();
     return;
@@ -161,6 +284,24 @@ const fetchLectureEnrollments = async (lectureId) => {
     lectureEnrollments.value = [];
   } finally {
     computeLectureEnrollmentStats();
+  }
+};
+
+const fetchAttendanceRecords = async (enrollmentId) => {
+  if (!isStudent.value || !enrollmentId) {
+    attendanceRecords.value = [];
+    return;
+  }
+  attendanceRecordsLoading.value = true;
+  attendanceRecordsError.value = '';
+  try {
+    const { data } = await httpClient.get(`/api/enrollments/${enrollmentId}/attendance`);
+    attendanceRecords.value = data || [];
+  } catch (err) {
+    attendanceRecordsError.value = err.response?.data?.message || 'Yoklama bilgileri alınamadı';
+    attendanceRecords.value = [];
+  } finally {
+    attendanceRecordsLoading.value = false;
   }
 };
 
@@ -317,6 +458,45 @@ const dropEnrollment = async (enrollment, lecture) => {
   }
 };
 
+const recordAttendanceForEnrollment = async (enrollment, attended) => {
+  if (!canManageAttendance.value) {
+    attendanceState.error = 'Yoklama kaydetmek için yetkin yok.';
+    return;
+  }
+  if (!attendanceWeek.value) {
+    attendanceState.error = 'Lütfen yoklama haftası seç.';
+    attendanceState.success = '';
+    return;
+  }
+  attendanceState.savingId = enrollment.id;
+  attendanceState.error = '';
+  attendanceState.success = '';
+  try {
+    await httpClient.post(`/api/enrollments/${enrollment.id}/attendance`, {
+      weekOf: attendanceWeek.value,
+      attended,
+    });
+    const name = enrollment.studentName
+      ? `${enrollment.studentName} ${enrollment.studentSurname || ''}`.trim()
+      : `#${enrollment.studentId}`;
+    attendanceState.success = `${name} için yoklama kaydedildi.`;
+    await fetchLectureEnrollments(enrollment.lectureId);
+  } catch (err) {
+    attendanceState.error = err.response?.data?.message || 'Yoklama kaydedilemedi.';
+  } finally {
+    attendanceState.savingId = null;
+  }
+};
+
+const handleAttendanceWeekUpdate = (value) => {
+  attendanceWeek.value = value;
+};
+
+const handleRecordAttendanceEvent = ({ enrollment, attended }) => {
+  if (!enrollment) return;
+  recordAttendanceForEnrollment(enrollment, attended);
+};
+
 watch(
   () => ({
     role: isStudent.value,
@@ -332,17 +512,57 @@ watch(
 
 watch(
   () => ({
-    lectureId: selectedLecture.value?.id,
-    role: isStudent.value,
+    student: isStudent.value,
+    id: profileId.value,
   }),
-  ({ lectureId, role }) => {
-    if (role && lectureId) {
+  ({ student }) => {
+    if (student) {
+      loadWatchlist();
+    } else {
+      watchedLectures.value = [];
+    }
+  },
+  { immediate: true }
+);
+
+watch(
+  () => ({
+    lectureId: selectedLecture.value?.id,
+    canView: isStudent.value || canManageLectures.value,
+  }),
+  ({ lectureId, canView }) => {
+    if (canView && lectureId) {
       fetchLectureEnrollments(lectureId);
     } else {
       lectureEnrollments.value = [];
       resetLectureEnrollmentStats();
     }
   }
+);
+
+watch(attendanceWeek, () => {
+  attendanceState.error = '';
+  attendanceState.success = '';
+});
+
+watch(
+  () => selectedLecture.value?.id,
+  () => {
+    attendanceState.error = '';
+    attendanceState.success = '';
+  }
+);
+
+watch(
+  () => (isStudent.value ? selectedEnrollment.value?.id : null),
+  (enrollmentId) => {
+    if (enrollmentId) {
+      fetchAttendanceRecords(enrollmentId);
+    } else {
+      attendanceRecords.value = [];
+    }
+  },
+  { immediate: true }
 );
 
 onMounted(() => {
@@ -384,208 +604,73 @@ onMounted(() => {
     </header>
 
     <div class="grid-2 stretch">
-      <div class="card">
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Ders</th>
-                <th>Açıklama</th>
-                <th>Kontenjan</th>
-                <th>Öğretmen</th>
-                <th v-if="isStudent">Kayıt Durumu</th>
-                <th v-if="canManageLectures"></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="lecture in filteredLectures"
-                :key="lecture.id"
-                :class="{ active: selectedLecture?.id === lecture.id }"
-                @click="handleSelectLecture(lecture)"
-              >
-                <td>{{ lecture.id }}</td>
-                <td>{{ lecture.name }}</td>
-                <td>{{ lecture.description }}</td>
-                <td>{{ lecture.capacity }}</td>
-                <td>
-                  <div>{{ lecture.teacherName || 'Atanmadı' }}</div>
-                  <small v-if="lecture.teacherId">#{{ lecture.teacherId }}</small>
-                </td>
-                <td v-if="isStudent">
-                  <template v-if="studentEnrollmentMap.get(lecture.id)">
-                    <span class="pill secondary">
-                      {{ enrollmentStatusLabel(studentEnrollmentMap.get(lecture.id).status) }}
-                    </span>
-                    <p class="hint">
-                      Güncelleme:
-                      {{ formatEnrollmentDate(studentEnrollmentMap.get(lecture.id).enrolledAt) }}
-                    </p>
-                  </template>
-                  <p v-else class="hint">Henüz kayıtlı değilsin</p>
-                </td>
-                <td v-if="canManageLectures">
-                  <button class="ghost tiny" @click.stop="deleteLecture(lecture)">Sil</button>
-                </td>
-              </tr>
-              <tr v-if="!loading && !filteredLectures.length">
-                <td colspan="6">Sonuç bulunamadı</td>
-              </tr>
-            </tbody>
-          </table>
-          <p v-if="loading" class="status">Dersler yükleniyor...</p>
-          <p v-if="error" class="error status">{{ error }}</p>
-        </div>
-        <footer class="table-footer">
-          <button @click="prevPage" :disabled="page === 0">Önceki</button>
-          <span>Sayfa {{ page + 1 }} / {{ Math.max(totalPages, 1) }}</span>
-          <button @click="nextPage" :disabled="page >= totalPages - 1">Sonraki</button>
-        </footer>
-      </div>
+      <LectureListCard
+        :lectures="filteredLectures"
+        :loading="loading"
+        :error="error"
+        :selected-lecture-id="selectedLecture?.id || null"
+        :is-student="isStudent"
+        :can-manage-lectures="canManageLectures"
+        :student-enrollment-map="studentEnrollmentMap"
+        :enrollment-status-label="enrollmentStatusLabel"
+        :format-enrollment-date="formatEnrollmentDate"
+        :page="page"
+        :total-pages="totalPages"
+        @select="handleSelectLecture"
+        @delete="deleteLecture"
+        @next-page="nextPage"
+        @prev-page="prevPage"
+      />
 
-      <div v-if="canManageLectures" class="card">
-        <header class="card-header">
-          <div>
-            <p class="eyebrow">Yeni Ders</p>
-            <h2>Ders oluştur</h2>
-          </div>
-        </header>
-        <form class="form-grid" @submit.prevent="createLecture">
-          <label>
-            İsim
-            <input v-model="lectureForm.name" placeholder="Mikroservis Tasarımı" required />
-          </label>
-          <label class="full-span">
-            Açıklama
-            <textarea
-              v-model="lectureForm.description"
-              placeholder="Kısa ders özeti"
-              rows="3"
-            ></textarea>
-          </label>
-          <label>
-            Kontenjan
-            <input v-model.number="lectureForm.capacity" type="number" min="1" required />
-          </label>
-          <label>
-            Öğretmen
-            <select v-model="lectureForm.teacherId" required>
-              <option disabled value="">Öğretmen seç</option>
-              <option v-for="teacher in teacherOptions" :key="teacher.id" :value="teacher.id">
-                {{ teacher.name }} {{ teacher.surname }}
-              </option>
-            </select>
-          </label>
-          <div class="full-span">
-            <button type="submit" :disabled="formLoading">
-              {{ formLoading ? 'Kaydediliyor...' : 'Dersi Oluştur' }}
-            </button>
-            <p v-if="formError" class="error">{{ formError }}</p>
-          </div>
-        </form>
-      </div>
-      <div v-else class="card student-detail-card">
-        <template v-if="selectedLecture">
-          <header class="card-header">
-            <div>
-              <p class="eyebrow">Seçilen ders</p>
-              <h2>{{ selectedLecture.name }}</h2>
-              <p class="subtitle">{{ selectedLecture.description || 'Açıklama bulunmuyor' }}</p>
-            </div>
-          </header>
-          <p class="meta">
-            Kapasite: <strong>{{ selectedLecture.capacity }}</strong> • Öğretmen:
-            <strong>{{ selectedLecture.teacherName }}</strong>
-            <span v-if="selectedLecture.teacherId">(#{{ selectedLecture.teacherId }})</span>
-          </p>
-
-          <div class="student-enrollment-state">
-            <p v-if="myEnrollmentsLoading" class="status">Kayıt durumun güncelleniyor...</p>
-            <p v-if="myEnrollmentsError" class="error status">{{ myEnrollmentsError }}</p>
-            <p v-if="enrollmentState.error" class="error status">{{ enrollmentState.error }}</p>
-            <p v-if="enrollmentState.success" class="status success">
-              {{ enrollmentState.success }}
-            </p>
-          </div>
-
-          <div class="capacity-panel">
-            <div class="capacity-panel__row">
-              <div>
-                <p class="eyebrow">Kontenjan durumu</p>
-                <div class="capacity-meter">
-                  <div class="capacity-meter__bar" :style="{ width: `${capacityUsage}%` }"></div>
-                </div>
-                <small>{{ lectureEnrollmentStats.active }} / {{ selectedLecture.capacity }} aktif öğrenci</small>
-              </div>
-              <div class="capacity-panel__stats">
-                <span class="pill success">{{ lectureEnrollmentStats.pending }} onay kuyruğu</span>
-                <span class="pill secondary">{{ lectureEnrollmentStats.waiting }} bekleme</span>
-              </div>
-            </div>
-            <p v-if="selectedEnrollment?.waitlistPosition" class="hint">
-              Bekleme sırası: #{{ selectedEnrollment.waitlistPosition }}
-            </p>
-            <div class="action-buttons">
-              <button
-                v-if="!selectedEnrollment"
-                class="ghost"
-                :disabled="enrollmentState.loading"
-                @click="enrollInLecture(selectedLecture)"
-              >
-                {{ enrollmentState.loading ? 'Gönderiliyor...' : 'Bu derse kayıt ol' }}
-              </button>
-              <button
-                v-else
-                class="ghost danger"
-                :disabled="enrollmentState.loading"
-                @click="dropEnrollment(selectedEnrollment, selectedLecture)"
-              >
-                Kaydı iptal et
-              </button>
-            </div>
-          </div>
-
-          <section class="student-detail-section">
-            <h3>Program</h3>
-            <p v-if="scheduleLoading" class="status">Program yükleniyor...</p>
-            <p v-if="scheduleError" class="error">{{ scheduleError }}</p>
-            <ul v-else-if="schedule.length" class="resource-list">
-              <li v-for="slot in schedule" :key="slot.id">
-                <div>
-                  <strong>{{ slot.dayOfWeek }}</strong>
-                  <p class="date-range">{{ slot.startTime }} - {{ slot.endTime }}</p>
-                </div>
-                <span class="pill">{{ slot.classroomName }}</span>
-              </li>
-            </ul>
-            <p v-else>Bu ders için planlanmış oturum bulunamadı.</p>
-          </section>
-
-          <section class="student-detail-section">
-            <h3>Not bileşenleri</h3>
-            <p class="subtitle">API: /api/grade-components?lectureId={{ selectedLecture.id }}</p>
-            <p v-if="gradeLoading" class="status">Not bileşenleri yükleniyor...</p>
-            <p v-if="gradeError" class="error">{{ gradeError }}</p>
-            <ul class="resource-list" v-if="!gradeLoading && !gradeError">
-              <li v-for="component in gradeComponents" :key="component.id">
-                <div>
-                  <strong>{{ component.name }}</strong>
-                  <p>Ağırlık: %{{ component.weight }} • Max: {{ component.maxScore }}</p>
-                </div>
-                <span class="pill secondary">#{{ component.id }}</span>
-              </li>
-              <li v-if="!gradeComponents.length">
-                <p>Derse ait bileşen tanımlanmamış.</p>
-              </li>
-            </ul>
-          </section>
-        </template>
-        <template v-else>
-          <p class="status">Detayları görmek için listeden bir ders seç.</p>
-        </template>
-      </div>
+      <LectureFormCard
+        v-if="canManageLectures"
+        :can-manage-lectures="canManageLectures"
+        :lecture-form="lectureForm"
+        :teacher-options="teacherOptions"
+        :form-loading="formLoading"
+        :form-error="formError"
+        @submit="createLecture"
+      />
+      <StudentLectureDetailCard
+        v-else
+        :selected-lecture="selectedLecture"
+        :my-enrollments-loading="myEnrollmentsLoading"
+        :my-enrollments-error="myEnrollmentsError"
+        :enrollment-state="enrollmentState"
+        :lecture-enrollment-stats="lectureEnrollmentStats"
+        :capacity-usage="capacityUsage"
+        :selected-enrollment="selectedEnrollment"
+        :schedule="schedule"
+        :schedule-loading="scheduleLoading"
+        :schedule-error="scheduleError"
+        :grade-components="gradeComponents"
+        :grade-loading="gradeLoading"
+        :grade-error="gradeError"
+        :attendance-records="attendanceRecords"
+        :attendance-records-loading="attendanceRecordsLoading"
+        :attendance-records-error="attendanceRecordsError"
+        :remaining-absence="remainingAbsence"
+        :selected-enrollment-absence-limit="selectedEnrollmentAbsenceLimit"
+        :last-absence-record="lastAbsenceRecord"
+        :seat-alert-status="seatAlertStatus"
+        :is-watched-lecture="isWatchedLecture"
+        :format-enrollment-date="formatEnrollmentDate"
+        @enroll="enrollInLecture"
+        @drop="({ enrollment, lecture }) => dropEnrollment(enrollment, lecture)"
+        @toggle-watch="toggleLectureWatch"
+      />
     </div>
+
+    <TeacherAttendanceCard
+      :visible="Boolean(selectedLecture) && canManageAttendance"
+      :attendance-eligible-enrollments="attendanceEligibleEnrollments"
+      :attendance-week="attendanceWeek"
+      :attendance-state="attendanceState"
+      :attendance-limit="attendanceLimit"
+      :status-labels="statusLabels"
+      @update:attendanceWeek="handleAttendanceWeekUpdate"
+      @record-attendance="handleRecordAttendanceEvent"
+    />
 
     <div class="grid-2" v-if="selectedLecture && canManageLectures">
       <aside class="card">

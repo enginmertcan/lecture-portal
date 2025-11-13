@@ -1,7 +1,10 @@
 <script setup>
-import { reactive, ref, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import httpClient from '../api/httpClient';
 import InfoHint from '../components/InfoHint.vue';
+import EnrollmentTableCard from '../components/enrollments/EnrollmentTableCard.vue';
+import EnrollmentCreateCard from '../components/enrollments/EnrollmentCreateCard.vue';
+import EnrollmentGradeCard from '../components/enrollments/EnrollmentGradeCard.vue';
 
 const enrollments = ref([]);
 const loading = ref(false);
@@ -189,6 +192,16 @@ watch(
 
 fetchLectures();
 fetchEnrollments();
+
+const showPagination = computed(() => !filterLectureId.value && !filterStudentId.value);
+
+const handleTableAction = ({ id, action }) => {
+  runAction(id, action);
+};
+
+const handleCreate = () => createEnrollment();
+const handleComplete = () => completeEnrollment();
+const handleRecordGrade = () => recordGrade();
 </script>
 
 <template>
@@ -225,146 +238,37 @@ fetchEnrollments();
       </div>
     </header>
 
-    <article class="card">
-      <div class="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Ders</th>
-              <th>Öğrenci</th>
-              <th>Durum</th>
-              <th>Bekleme</th>
-              <th>Not</th>
-              <th>Aksiyonlar</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="enrollment in enrollments" :key="enrollment.id">
-              <td>#{{ enrollment.id }}</td>
-              <td>{{ enrollment.lectureId }}</td>
-              <td>{{ enrollment.studentId }}</td>
-              <td><span class="pill secondary">{{ enrollment.status }}</span></td>
-              <td>{{ enrollment.waitlistPosition ?? '—' }}</td>
-              <td>{{ enrollment.grade ?? '—' }}</td>
-              <td class="action-buttons">
-                <button class="ghost tiny" @click="runAction(enrollment.id, 'approve')">Onayla</button>
-                <button class="ghost tiny" @click="runAction(enrollment.id, 'drop')">Drop</button>
-                <button class="ghost tiny" @click="runAction(enrollment.id, 'promote')">Promote</button>
-              </td>
-            </tr>
-            <tr v-if="!loading && !enrollments.length">
-              <td colspan="7">Kayıt bulunamadı.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p v-if="loading" class="status">Kayıtlar yükleniyor...</p>
-      <p v-if="error" class="error">{{ error }}</p>
-      <footer class="table-footer" v-if="!filterLectureId && !filterStudentId">
-        <button @click="prevPage" :disabled="page === 0">Önceki</button>
-        <span>Sayfa {{ page + 1 }} / {{ Math.max(totalPages, 1) }}</span>
-        <button @click="nextPage" :disabled="page >= totalPages - 1">Sonraki</button>
-      </footer>
-    </article>
+    <EnrollmentTableCard
+      :enrollments="enrollments"
+      :loading="loading"
+      :error="error"
+      :page="page"
+      :total-pages="totalPages"
+      :show-pagination="showPagination"
+      @action="handleTableAction"
+      @prev-page="prevPage"
+      @next-page="nextPage"
+    />
 
     <div class="grid-2 stretch">
-      <article class="card">
-        <header class="card-header">
-          <div>
-            <p class="eyebrow">Öğrenci kaydı</p>
-            <h2>Yeni kayıt oluştur (STUDENT rolü gerektirir)</h2>
-          </div>
-        </header>
-        <form class="form-grid" @submit.prevent="createEnrollment">
-          <label>
-            Ders
-            <select v-model="enrollmentForm.lectureId" required>
-              <option disabled value="">Ders seç</option>
-              <option v-for="lecture in lectures" :key="lecture.id" :value="lecture.id">
-                {{ lecture.name }}
-              </option>
-            </select>
-          </label>
-          <label>
-            Öğrenci ID
-            <input v-model="enrollmentForm.studentId" type="number" min="1" required />
-          </label>
-          <div class="full-span">
-            <button type="submit" :disabled="formState.createLoading">
-              {{ formState.createLoading ? 'Kaydediliyor...' : 'Kayıt Oluştur' }}
-            </button>
-            <p v-if="formState.createError" class="error">{{ formState.createError }}</p>
-          </div>
-        </form>
+      <EnrollmentCreateCard
+        :lectures="lectures"
+        :enrollment-form="enrollmentForm"
+        :completion-form="completionForm"
+        :form-state="formState"
+        @create="handleCreate"
+        @complete="handleComplete"
+      />
 
-        <header class="card-header slim">
-          <div>
-            <p class="eyebrow">Durum güncelle</p>
-            <h3>Kaydı tamamla</h3>
-          </div>
-        </header>
-        <form class="form-grid" @submit.prevent="completeEnrollment">
-          <label>
-            Enrollment ID
-            <input v-model="completionForm.enrollmentId" type="number" min="1" required />
-          </label>
-          <label>
-            Final Notu
-            <input v-model="completionForm.grade" type="number" min="0" max="100" />
-          </label>
-          <div class="full-span">
-            <button type="submit" :disabled="formState.completionLoading">
-              {{ formState.completionLoading ? 'Gönderiliyor...' : 'Tamamla' }}
-            </button>
-            <p v-if="formState.completionError" class="error">{{ formState.completionError }}</p>
-          </div>
-        </form>
-      </article>
-
-      <article class="card">
-        <header class="card-header">
-          <div>
-            <p class="eyebrow">Not kayıt</p>
-            <h2>Bileşene not gir</h2>
-          </div>
-        </header>
-        <form class="form-grid" @submit.prevent="recordGrade">
-          <label>
-            Enrollment ID
-            <input v-model="gradeForm.enrollmentId" type="number" min="1" required />
-          </label>
-          <label>
-            Ders
-            <select v-model="gradeForm.lectureId" required>
-              <option disabled value="">Ders seç</option>
-              <option v-for="lecture in lectures" :key="lecture.id" :value="lecture.id">
-                {{ lecture.name }}
-              </option>
-            </select>
-          </label>
-          <label>
-            Bileşen
-            <select v-model="gradeForm.gradeComponentId" required>
-              <option value="" disabled>Bileşen seç</option>
-              <option v-for="component in gradeComponents" :key="component.id" :value="component.id">
-                {{ component.name }} (Max {{ component.maxScore }})
-              </option>
-            </select>
-          </label>
-          <label>
-            Puan
-            <input v-model="gradeForm.score" type="number" min="0" required />
-          </label>
-          <div class="full-span">
-            <button type="submit" :disabled="formState.gradeLoading || gradeLoading">
-              {{ formState.gradeLoading ? 'Kaydediliyor...' : 'Not Kaydet' }}
-            </button>
-            <p v-if="formState.gradeError" class="error">{{ formState.gradeError }}</p>
-            <p v-if="gradeError" class="error">{{ gradeError }}</p>
-          </div>
-        </form>
-      </article>
+      <EnrollmentGradeCard
+        :lectures="lectures"
+        :grade-form="gradeForm"
+        :grade-components="gradeComponents"
+        :form-state="formState"
+        :grade-loading="gradeLoading"
+        :grade-error="gradeError"
+        @record="handleRecordGrade"
+      />
     </div>
   </section>
 </template>

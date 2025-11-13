@@ -584,6 +584,54 @@ tbody tr.active {
   padding-bottom: 0;
 }
 
+.attendance-card .attendance-week {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+}
+
+.attendance-card .attendance-week input[type='date'] {
+  border: 1px solid #cbd5f5;
+  border-radius: 10px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.95rem;
+}
+
+.attendance-card table td.actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.absence-indicator {
+  display: flex;
+  gap: 0.35rem;
+  align-items: baseline;
+  font-size: 0.95rem;
+}
+
+.alert-panel {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.alert-panel .status-note {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.alert-panel .status-note.success {
+  color: #0f766e;
+  font-weight: 600;
+}
+
+.absence-summary strong.danger {
+  color: #b91c1c;
+}
+
 .pill {
   display: inline-flex;
   align-items: center;
@@ -603,6 +651,11 @@ tbody tr.active {
 .pill.success {
   background: #d1fae5;
   color: #047857;
+}
+
+.pill.danger {
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 .pill-group {
