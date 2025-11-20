@@ -20,6 +20,7 @@ const links = [
     name: 'gradeComponents',
     roles: ['ADMIN', 'TEACHER'],
   },
+  { label: 'Sınavlar', to: '/exams', name: 'exams', roles: ['ADMIN', 'TEACHER', 'STUDENT'] },
   { label: 'Kayıtlar', to: '/enrollments', name: 'enrollments', roles: ['ADMIN', 'TEACHER'] },
   { label: 'Veri Seti', to: '/bootstrap', name: 'bootstrap', roles: ['ADMIN'] },
   { label: 'Kullanıcılar', to: '/users', name: 'users', roles: ['ADMIN'] },

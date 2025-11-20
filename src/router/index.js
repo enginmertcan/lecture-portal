@@ -10,6 +10,7 @@ const ScheduleView = () => import('../views/ScheduleView.vue');
 const ClassroomsView = () => import('../views/ClassroomsView.vue');
 const ScheduleSlotsView = () => import('../views/ScheduleSlotsView.vue');
 const GradeComponentsView = () => import('../views/GradeComponentsView.vue');
+const ExamsView = () => import('../views/ExamsView.vue');
 const EnrollmentsView = () => import('../views/EnrollmentsView.vue');
 const UsersView = () => import('../views/UsersView.vue');
 const BootstrapView = () => import('../views/BootstrapView.vue');
@@ -70,6 +71,12 @@ const routes = [
     name: 'gradeComponents',
     component: GradeComponentsView,
     meta: { requiresAuth: true, roles: ['ADMIN', 'TEACHER'] },
+  },
+  {
+    path: '/exams',
+    name: 'exams',
+    component: ExamsView,
+    meta: { requiresAuth: true, roles: ['ADMIN', 'TEACHER', 'STUDENT'] },
   },
   {
     path: '/enrollments',
