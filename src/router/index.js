@@ -13,6 +13,8 @@ const GradeComponentsView = () => import('../views/GradeComponentsView.vue');
 const EnrollmentsView = () => import('../views/EnrollmentsView.vue');
 const UsersView = () => import('../views/UsersView.vue');
 const BootstrapView = () => import('../views/BootstrapView.vue');
+const SecurityView = () => import('../views/SecurityView.vue');
+const ForgotPasswordView = () => import('../views/ForgotPasswordView.vue');
 
 const routes = [
   {
@@ -25,6 +27,12 @@ const routes = [
     path: '/register',
     name: 'register',
     component: RegisterView,
+    meta: { guestOnly: true },
+  },
+  {
+    path: '/forgot-password',
+    name: 'forgotPassword',
+    component: ForgotPasswordView,
     meta: { guestOnly: true },
   },
   {
@@ -80,6 +88,12 @@ const routes = [
     name: 'bootstrap',
     component: BootstrapView,
     meta: { requiresAuth: true, roles: ['ADMIN'] },
+  },
+  {
+    path: '/security',
+    name: 'security',
+    component: SecurityView,
+    meta: { requiresAuth: true },
   },
   {
     path: '/:pathMatch(.*)*',

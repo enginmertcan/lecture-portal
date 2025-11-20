@@ -13,6 +13,9 @@ httpClient.interceptors.request.use((config) => {
   if (authStore.accessToken) {
     config.headers.Authorization = `Bearer ${authStore.accessToken}`;
   }
+  if (authStore.deviceId) {
+    config.headers['X-Device-Id'] = authStore.deviceId;
+  }
   return config;
 });
 

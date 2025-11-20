@@ -20,6 +20,8 @@ const selectedVariant = ref(route.query.type === 'teacher' ? 'TEACHER' : 'STUDEN
 
 const identityNo = ref('');
 const password = ref('');
+const mfaCode = ref('');
+const mfaChallenge = ref(null);
 const authStore = useAuthStore();
 const router = useRouter();
 const { loading } = storeToRefs(authStore);
@@ -35,15 +37,41 @@ const selectVariant = (value) => {
 const handleSubmit = async () => {
   formError.value = '';
   try {
-    await authStore.login({
+    const result = await authStore.login({
       identityNo: identityNo.value,
       password: password.value,
+      challengeId: mfaChallenge.value?.challengeId,
+      mfaCode: mfaChallenge.value ? mfaCode.value : null,
     });
+    if (result?.requiresMfa) {
+      mfaChallenge.value = {
+        challengeId: result.challengeId,
+        expiresAt: result.expiresAt,
+        channel: result.channel,
+        message: result.message || 'Güvenlik kodu e-posta adresine gönderildi.',
+      };
+      mfaCode.value = '';
+      formError.value = 'E-posta adresine gelen MFA kodunu girin.';
+      return;
+    }
+    mfaChallenge.value = null;
+    mfaCode.value = '';
     router.push(route.query.redirect || '/');
   } catch (err) {
     formError.value = err.message || 'Giriş başarısız';
   }
 };
+
+const challengeExpiresLabel = computed(() => {
+  if (!mfaChallenge.value?.expiresAt) {
+    return null;
+  }
+  const expires = new Date(mfaChallenge.value.expiresAt);
+  if (Number.isNaN(expires.getTime())) {
+    return null;
+  }
+  return expires.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+});
 </script>
 
 <template>
@@ -104,12 +132,36 @@ const handleSubmit = async () => {
         />
       </label>
 
+      <div v-if="mfaChallenge" class="mfa-box">
+        <strong>Çok faktörlü doğrulama</strong>
+        <p>
+          {{ mfaChallenge.message }}
+          <span v-if="challengeExpiresLabel">· Son geçerlilik: {{ challengeExpiresLabel }}</span>
+        </p>
+        <label>
+          Güvenlik Kodu
+          <input
+            v-model="mfaCode"
+            name="mfaCode"
+            type="text"
+            inputmode="numeric"
+            maxlength="6"
+            required
+            placeholder="123456"
+          />
+        </label>
+      </div>
+
       <button type="submit" :disabled="loading">
         {{ loading ? 'Giriş yapılıyor...' : 'Giriş Yap' }}
       </button>
       <p v-if="formError" class="error">{{ formError }}</p>
     </form>
 
+    <p class="helper">
+      Parolanı mı unuttun?
+      <RouterLink to="/forgot-password">Sıfırlama isteği gönder</RouterLink>
+    </p>
     <p class="helper">
       Hesabın yok mu?
       <RouterLink to="/register">Hemen kayıt ol</RouterLink> veya Swagger dokümanından demo kullanıcıyı kullan.
@@ -126,5 +178,26 @@ const handleSubmit = async () => {
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
   font-weight: 600;
+}
+
+.mfa-box {
+  border: 1px solid #d6d9ff;
+  background: #f5f6ff;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.mfa-box strong {
+  font-size: 0.95rem;
+}
+
+.mfa-box p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #4a4d8b;
 }
 </style>
